@@ -1,15 +1,30 @@
 {
   "version": 2,
-  "builds": [
-    {
-      "src": "app.py",
-      "use": "@vercel/python"
-    }
-  ],
+  "cleanUrls": true,
   "routes": [
     {
+      "src": "/static/(.*)",
+      "dest": "/static/$1"
+    },
+    {
+      "src": "/admin",
+      "dest": "/templates/admin/dashboard.html"
+    },
+    {
+      "src": "/login",
+      "dest": "/templates/login.html"
+    },
+    {
+      "src": "/register",
+      "dest": "/templates/register.html"
+    },
+    {
+      "src": "/reader",
+      "dest": "/templates/reader.html"
+    },
+    {
       "src": "/(.*)",
-      "dest": "app.py"
+      "dest": "/templates/index.html"
     }
   ]
 }
