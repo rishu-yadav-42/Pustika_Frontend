@@ -1,8 +1,6 @@
 // API Bridge for Pustika Frontend & Backend Communication
 
-const API_BASE_URL = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
-  ? 'http://127.0.0.1:5000/api'
-  : 'https://pustika-backend.vercel.app/api'; // Replace with live Vercel Backend URL if needed
+const API_BASE_URL = 'https://pustika-backend.vercel.app/api';
 
 window.PustikaAPI = {
   baseUrl: API_BASE_URL,
