@@ -76,6 +76,21 @@ class Chapter(db.Model):
     title = db.Column(db.String(200), nullable=False)
     text_content = db.Column(db.Text, nullable=False)
 
+class Favorite(db.Model):
+    __tablename__ = 'favorites'
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    book_id = db.Column(db.Integer, db.ForeignKey('books.id'), nullable=False)
+    book = db.relationship('Book', lazy=True)
+
+class ReadingHistory(db.Model):
+    __tablename__ = 'reading_history'
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    book_id = db.Column(db.Integer, db.ForeignKey('books.id'), nullable=False)
+    last_chapter_number = db.Column(db.Integer, default=1)
+    book = db.relationship('Book', lazy=True)
+
 # ==========================================
 # 3. FRONTEND APP & ROUTES
 # ==========================================
@@ -137,17 +152,52 @@ def create_app():
 
     @app.route('/book/<int:book_id>')
     def book_detail(book_id):
-        book = Book.query.get_or_404(book_id)
+        book = Book.query.get(book_id)
+        if not book:
+            return redirect(url_for('books_catalog'))
         return render_template('book_detail.html', book=book)
 
     @app.route('/reader/<int:book_id>')
     def reader(book_id):
-        book = Book.query.get_or_404(book_id)
+        book = Book.query.get(book_id)
+        if not book:
+            return redirect(url_for('books_catalog'))
         chapter_id = request.args.get('chapter', 1, type=int)
         current_chapter = Chapter.query.filter_by(book_id=book_id, chapter_number=chapter_id).first()
         if not current_chapter and book.chapters:
             current_chapter = book.chapters[0]
         return render_template('reader.html', book=book, current_chapter=current_chapter)
+
+    @app.route('/audio-player/<int:book_id>')
+    def audio_player(book_id):
+        book = Book.query.get(book_id)
+        if not book:
+            return redirect(url_for('books_catalog'))
+        chapter_id = request.args.get('chapter', 1, type=int)
+        current_chapter = Chapter.query.filter_by(book_id=book_id, chapter_number=chapter_id).first()
+        if not current_chapter and book.chapters:
+            current_chapter = book.chapters[0]
+        return render_template('audio_player.html', book=book, current_chapter=current_chapter)
+
+    @app.route('/favorites')
+    def favorites():
+        if not current_user.is_authenticated:
+            return redirect(url_for('login'))
+        try:
+            favs = Favorite.query.filter_by(user_id=current_user.id).all()
+        except Exception:
+            favs = []
+        return render_template('favorites.html', favorites=favs)
+
+    @app.route('/history')
+    def history():
+        if not current_user.is_authenticated:
+            return redirect(url_for('login'))
+        try:
+            hist = ReadingHistory.query.filter_by(user_id=current_user.id).all()
+        except Exception:
+            hist = []
+        return render_template('history.html', history=hist)
 
     @app.route('/login', methods=['GET', 'POST'])
     def login():
@@ -189,6 +239,14 @@ def create_app():
         except Exception:
             books = []
         return render_template('admin/dashboard.html', books=books)
+
+    @app.errorhandler(404)
+    def page_not_found(e):
+        return render_template('404.html'), 404
+
+    @app.errorhandler(500)
+    def internal_server_error(e):
+        return render_template('500.html'), 500
 
     with app.app_context():
         db.create_all()
