@@ -59,6 +59,9 @@ class User(UserMixin, db.Model):
     password_hash = db.Column(db.String(255), nullable=False)
     is_admin = db.Column(db.Boolean, default=False)
 
+    def is_favorited(self, book_id):
+        return Favorite.query.filter_by(user_id=self.id, book_id=book_id).first() is not None
+
 class Category(db.Model):
     __tablename__ = 'categories'
     id = db.Column(db.Integer, primary_key=True)
@@ -110,6 +113,12 @@ def create_app():
         static_url_path='/static'
     )
     app.config.from_object(Config)
+
+    secret = (os.getenv('SECRET_KEY') or '').strip()
+    if not secret:
+        secret = 'pustika-fallback-secret-key-prod-2026-xyz123'
+    app.secret_key = secret
+    app.config['SECRET_KEY'] = secret
 
     try:
         os.makedirs(Config.PDF_UPLOAD_FOLDER, exist_ok=True)
@@ -253,13 +262,134 @@ def create_app():
             books = []
         return render_template('admin/dashboard.html', books=books)
 
+    @app.route('/favicon.ico')
+    def favicon():
+        return '', 204
+
+    @app.route('/api/book/<int:book_id>/full_details')
+    def get_book_full_details(book_id):
+        try:
+            book = Book.query.get_or_404(book_id)
+            is_fav = current_user.is_authenticated and current_user.is_favorited(book.id)
+            last_chap_id, last_page, last_audio_pos = None, 1, 0.0
+            if current_user.is_authenticated:
+                history = ReadingHistory.query.filter_by(user_id=current_user.id, book_id=book.id).first()
+                if history:
+                    last_chap_id = getattr(history, 'chapter_id', None) or getattr(history, 'last_chapter_number', 1)
+                    last_page = getattr(history, 'last_read_page', 1) or 1
+                    last_audio_pos = getattr(history, 'last_audio_position', 0.0) or 0.0
+
+            chapters_data = []
+            for chap in sorted(book.chapters, key=lambda c: c.chapter_number):
+                audio_info = None
+                audio_file = getattr(chap, 'audio_file', None)
+                if audio_file:
+                    audio_info = {
+                        'id': getattr(audio_file, 'id', None),
+                        'audio_url': f"/static/{getattr(audio_file, 'file_path', '')}",
+                        'duration': getattr(audio_file, 'duration_seconds', 0),
+                        'engine': getattr(audio_file, 'voice_engine', 'edge-tts')
+                    }
+                chapters_data.append({
+                    'id': chap.id,
+                    'chapter_number': chap.chapter_number,
+                    'title': chap.title,
+                    'text_content': chap.text_content,
+                    'audio': audio_info
+                })
+
+            return jsonify({
+                'id': book.id,
+                'title': book.title,
+                'author': book.author,
+                'description': book.description or '',
+                'language': getattr(book, 'language', 'English'),
+                'category': book.category.name if book.category else 'General',
+                'cover_url': f"/static/images/covers/{book.cover_image}",
+                'is_favorited': is_fav,
+                'has_audio': any(c.get('audio') is not None for c in chapters_data),
+                'last_chapter_id': last_chap_id,
+                'last_page': last_page,
+                'last_audio_pos': last_audio_pos,
+                'chapters': chapters_data
+            })
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
+
+    @app.route('/api/book/<int:book_id>/playlist')
+    def get_book_playlist(book_id):
+        try:
+            book = Book.query.get_or_404(book_id)
+            playlist = []
+            for chap in sorted(book.chapters, key=lambda c: c.chapter_number):
+                audio_file = getattr(chap, 'audio_file', None)
+                if audio_file:
+                    playlist.append({
+                        'chapter_id': chap.id,
+                        'chapter_number': chap.chapter_number,
+                        'title': chap.title,
+                        'audio_url': f"/static/{getattr(audio_file, 'file_path', '')}",
+                        'duration': getattr(audio_file, 'duration_seconds', 0),
+                        'engine': getattr(audio_file, 'voice_engine', 'edge-tts')
+                    })
+            return jsonify({
+                'book_id': book.id,
+                'book_title': book.title,
+                'author': book.author,
+                'cover_url': f"/static/images/covers/{book.cover_image}",
+                'playlist': playlist
+            })
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
+
+    @app.route('/api/toggle-favorite/<int:book_id>', methods=['POST'])
+    def toggle_favorite(book_id):
+        if not current_user.is_authenticated:
+            return jsonify({'success': False, 'message': 'Please sign in to add favorites'}), 401
+        fav = Favorite.query.filter_by(user_id=current_user.id, book_id=book_id).first()
+        if fav:
+            db.session.delete(fav)
+            db.session.commit()
+            return jsonify({'success': True, 'is_favorited': False, 'message': 'Removed from favorites'})
+        db.session.add(Favorite(user_id=current_user.id, book_id=book_id))
+        db.session.commit()
+        return jsonify({'success': True, 'is_favorited': True, 'message': 'Added to favorites'})
+
+    @app.route('/api/history/update', methods=['POST'])
+    def update_history():
+        if not current_user.is_authenticated:
+            return jsonify({'success': True})
+        data = request.get_json() or {}
+        book_id = data.get('book_id')
+        if not book_id:
+            return jsonify({'success': False, 'message': 'Missing book_id'}), 400
+        chapter_id = data.get('chapter_id')
+        history = ReadingHistory.query.filter_by(user_id=current_user.id, book_id=book_id).first()
+        if not history:
+            history = ReadingHistory(user_id=current_user.id, book_id=book_id)
+            db.session.add(history)
+        if hasattr(history, 'last_chapter_number') and chapter_id:
+            history.last_chapter_number = chapter_id
+        db.session.commit()
+        return jsonify({'success': True})
+
     @app.errorhandler(404)
     def page_not_found(e):
-        return render_template('404.html'), 404
+        if request.path.startswith('/api/'):
+            return jsonify({'error': 'Endpoint not found'}), 404
+        try:
+            return render_template('404.html'), 404
+        except Exception:
+            return "<h3>404 Not Found</h3><p><a href='/'>Back to Home</a></p>", 404
 
     @app.errorhandler(500)
     def internal_server_error(e):
-        return render_template('500.html'), 500
+        if request.path.startswith('/api/'):
+            return jsonify({'error': 'Internal server error'}), 500
+        try:
+            return render_template('500.html'), 500
+        except Exception:
+            return "<h3>500 Server Error</h3><p><a href='/'>Back to Home</a></p>", 500
 
     with app.app_context():
         db.create_all()
