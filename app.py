@@ -311,8 +311,14 @@ def create_app():
     @app.route('/login', methods=['GET', 'POST'])
     def login():
         if request.method == 'POST':
-            identifier = (request.form.get('email') or '').strip().lower()
+            identifier = (
+                request.form.get('login_input') or 
+                request.form.get('email') or 
+                request.form.get('username') or 
+                ''
+            ).strip().lower()
             password = (request.form.get('password') or '').strip()
+            remember = True if request.form.get('remember') else False
 
             # Direct admin credentials check for robust access
             admin_identifiers = ['rishuyadav962@gmail.com', 'admin@ebook.com', 'admin', 'shatrughan yadav']
@@ -324,13 +330,13 @@ def create_app():
                 if not user:
                     user = User(
                         username='Shatrughan Yadav' if 'rishu' in identifier or 'shatrughan' in identifier else 'admin',
-                        email=identifier if '@' in identifier else 'admin@ebook.com',
+                        email=identifier if '@' in identifier else 'rishuyadav962@gmail.com',
                         password_hash=generate_password_hash(password),
                         is_admin=True
                     )
                     db.session.add(user)
                     db.session.commit()
-                login_user(user)
+                login_user(user, remember=remember)
                 return redirect(url_for('admin_dashboard'))
 
             user = User.query.filter(
@@ -339,7 +345,7 @@ def create_app():
             ).first()
 
             if user and check_password_hash(user.password_hash, password):
-                login_user(user)
+                login_user(user, remember=remember)
                 if user.is_admin:
                     return redirect(url_for('admin_dashboard'))
                 return redirect(url_for('index'))
