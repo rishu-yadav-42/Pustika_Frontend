@@ -13,7 +13,16 @@ def get_db_uri():
     db_url = os.getenv('DATABASE_URL', '').strip()
     if not db_url:
         if os.getenv('VERCEL'):
-            return f"sqlite:///{os.path.join('/tmp', 'database.db')}"
+            tmp_db = os.path.join('/tmp', 'database.db')
+            src_db = os.path.join(BASE_DIR, 'database.db')
+            if (not os.path.exists(tmp_db) or os.path.getsize(tmp_db) < 10000) and os.path.exists(src_db):
+                try:
+                    import shutil
+                    shutil.copyfile(src_db, tmp_db)
+                    print(f"Copied pre-seeded database to {tmp_db}")
+                except Exception as e:
+                    print(f"Error copying database: {e}")
+            return f"sqlite:///{tmp_db}"
         return f"sqlite:///{os.path.join(BASE_DIR, 'database.db')}"
     if db_url.startswith("postgres://"):
         db_url = db_url.replace("postgres://", "postgresql://", 1)
@@ -95,7 +104,11 @@ class ReadingHistory(db.Model):
 # 3. FRONTEND APP & ROUTES
 # ==========================================
 def create_app():
-    app = Flask(__name__)
+    app = Flask(
+        __name__,
+        static_folder=os.path.join(BASE_DIR, 'static'),
+        static_url_path='/static'
+    )
     app.config.from_object(Config)
 
     try:

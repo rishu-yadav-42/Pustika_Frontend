@@ -113,12 +113,24 @@ async function selectBookForReader(bookId) {
         if (coverEl) coverEl.src = data.cover_url;
         
         if (data.chapters && data.chapters.length > 0) {
+            pustikaModalState.currentChapterIndex = 0;
+            pustikaModalState.currentPageIndex = 1;
             const chap = data.chapters[0];
+            const badgeEl = document.getElementById('fr-chapter-badge');
+            if (badgeEl) badgeEl.textContent = `Chapter ${chap.chapter_number}`;
             if (headingEl) headingEl.textContent = chap.title.replace(/^.*Chapter \d+:?\s*/i, '') || chap.title;
-            if (contentEl) {
-                const paragraphs = chap.text_content.split(/\n\s*\n/).filter(p => p.trim() !== '');
-                contentEl.innerHTML = paragraphs.slice(0, 3).map(p => `<p class="mb-3">${escapeHtml(p)}</p>`).join('');
+            
+            // Build pagination chunks for floating reader
+            const paragraphs = chap.text_content.split(/\n\s*\n/).filter(p => p.trim() !== '');
+            const chunkSize = 3;
+            const pages = [];
+            for (let i = 0; i < paragraphs.length; i += chunkSize) {
+                pages.push(paragraphs.slice(i, i + chunkSize));
             }
+            pustikaModalState.pages = pages.length > 0 ? pages : [[chap.text_content]];
+            pustikaModalState.totalPages = pustikaModalState.pages.length;
+            
+            renderPageContent('next');
         }
     } catch (e) {
         console.error("Error updating floating reader:", e);
@@ -238,31 +250,66 @@ function loadChapterContent(idx) {
     renderPageContent();
 }
 
-function renderPageContent() {
+function renderPageContent(direction = 'next') {
     const pages = pustikaModalState.pages || [];
     const curIdx = pustikaModalState.currentPageIndex - 1;
     const curParagraphs = pages[curIdx] || [];
 
+    // 1. Update PM Modal Body (if present)
     const bodyEl = document.getElementById('pm-text-body');
+    const pmSurface = document.getElementById('pm-paper-surface');
     if (bodyEl) {
         bodyEl.innerHTML = curParagraphs.map((p, pIdx) => `
             <p class="pm-paragraph mb-4" data-para-index="${pIdx}">${escapeHtml(p)}</p>
         `).join('');
     }
 
+    // 2. Update Floating Reader Body (if present)
+    const frContentEl = document.getElementById('fr-text-content');
+    const frSurface = document.getElementById('fr-body-paper');
+    if (frContentEl) {
+        frContentEl.innerHTML = curParagraphs.map(p => `
+            <p class="mb-3">${escapeHtml(p)}</p>
+        `).join('');
+    }
+
+    // 3. Apply 3D Page Turn Animation
+    [pmSurface, frSurface].forEach(surf => {
+        if (surf) {
+            surf.classList.remove('anim-page-flip-next', 'anim-page-flip-prev');
+            // Force browser reflow to restart animation cleanly
+            void surf.offsetWidth;
+            const animClass = (direction === 'prev') ? 'anim-page-flip-prev' : 'anim-page-flip-next';
+            surf.classList.add(animClass);
+            setTimeout(() => {
+                surf.classList.remove('anim-page-flip-next', 'anim-page-flip-prev');
+            }, 500);
+        }
+    });
+
+    // 4. Update page counters for both reader surfaces
     const cp = document.getElementById('pm-current-page');
     const tp = document.getElementById('pm-total-pages');
     const fp = document.getElementById('pm-footer-page');
+    const frPage = document.getElementById('fr-page-num');
+    const frTotal = document.getElementById('fr-total-pages');
+    const frFooter = document.getElementById('fr-footer-page');
+
     if (cp) cp.textContent = pustikaModalState.currentPageIndex;
     if (tp) tp.textContent = pustikaModalState.totalPages;
     if (fp) fp.textContent = pustikaModalState.currentPageIndex;
+
+    if (frPage) frPage.textContent = pustikaModalState.currentPageIndex;
+    if (frTotal) frTotal.textContent = pustikaModalState.totalPages;
+    if (frFooter) frFooter.textContent = pustikaModalState.currentPageIndex;
 }
 
 function changeReaderPage(delta) {
     const newPage = pustikaModalState.currentPageIndex + delta;
     if (newPage >= 1 && newPage <= pustikaModalState.totalPages) {
         pustikaModalState.currentPageIndex = newPage;
-        renderPageContent();
+        const direction = (delta < 0) ? 'prev' : 'next';
+        renderPageContent(direction);
     }
 }
 

@@ -1,115 +1,115 @@
-<!-- Pustika Interactive Reader & Player Modal -->
+<!-- Pustika Interactive Reader & Player Modal (Exact Match to User Screenshot) -->
 <div class="modal fade pustika-modal" id="pustikaReaderModal" tabindex="-1" aria-labelledby="pustikaReaderModalLabel" aria-hidden="true">
-  <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
-    <div class="modal-content pustika-modal-content">
+  <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+    <div class="modal-content pustika-modal-content border-0 shadow-lg" style="border-radius: 20px; overflow: hidden; background: #ffffff;">
       
-      <!-- Modal Header Bar -->
-      <div class="modal-header pustika-modal-header border-0 pb-2 align-items-center">
+      <!-- Modal Header Bar (Exact Match) -->
+      <div class="modal-header pustika-modal-header border-0 px-4 pt-3 pb-2 align-items-center justify-content-between bg-white">
         <div class="d-flex align-items-center gap-3">
-          <img id="pm-cover-img" src="" alt="Book Cover" class="pustika-modal-cover-thumb rounded shadow-sm" onerror="this.src='https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?auto=format&fit=crop&w=150&q=80'">
+          <img id="pm-cover-img" src="" alt="Book Cover" class="pustika-modal-cover-thumb rounded shadow-sm" style="width: 44px; height: 60px; object-fit: cover;" onerror="this.src='https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?auto=format&fit=crop&w=150&q=80'">
           <div>
-            <h5 class="modal-title fw-bold mb-0 text-truncate" id="pm-book-title" style="max-width: 400px;">Book Title</h5>
-            <small class="text-secondary" id="pm-book-author">Author Name</small>
+            <h6 class="modal-title fw-bold mb-0 text-dark text-truncate" id="pm-book-title" style="max-width: 280px; font-size: 1.05rem;">Book Title</h6>
+            <small class="text-secondary" id="pm-book-author" style="font-size: 0.85rem;">Author Name</small>
           </div>
         </div>
 
         <div class="d-flex align-items-center gap-2">
           <!-- Favorite Button -->
-          <button type="button" class="btn btn-icon-round" id="pm-fav-btn" title="Add to Favorites" onclick="handleModalFavoriteToggle()">
-            <i class="bi bi-heart fs-5"></i>
+          <button type="button" class="btn btn-sm btn-icon-glass rounded-circle" id="pm-fav-btn" title="Add to Favorites" onclick="handleModalFavoriteToggle()">
+            <i class="bi bi-heart fs-6 text-secondary"></i>
           </button>
           
           <!-- Fullscreen Toggle -->
-          <button type="button" class="btn btn-icon-round" id="pm-fullscreen-btn" title="Toggle Fullscreen" onclick="toggleModalFullscreen()">
-            <i class="bi bi-arrows-fullscreen fs-5"></i>
+          <button type="button" class="btn btn-sm btn-icon-glass rounded-circle" id="pm-fullscreen-btn" title="Toggle Fullscreen" onclick="toggleModalFullscreen()">
+            <i class="bi bi-aspect-ratio fs-6 text-secondary"></i>
           </button>
 
           <!-- Close Modal -->
-          <button type="button" class="btn-close ms-2" data-bs-dismiss="modal" aria-label="Close"></button>
+          <button type="button" class="btn btn-sm btn-icon-glass rounded-circle ms-1" data-bs-dismiss="modal" aria-label="Close" title="Close Reader">
+            <i class="bi bi-x-lg fs-6 text-secondary"></i>
+          </button>
         </div>
       </div>
 
-      <!-- Mode & Toolbar Controls -->
-      <div class="pustika-modal-toolbar px-4 py-2 d-flex flex-wrap align-items-center justify-content-between border-bottom gap-2">
+      <!-- Mode & Toolbar Controls (Exact Match to Screenshot) -->
+      <div class="pustika-modal-toolbar px-4 py-2 d-flex align-items-center justify-content-between border-top border-bottom bg-light">
         
-        <!-- Left: Mode Switcher (Text, Audio, Both) -->
-        <div class="pustika-mode-selector d-flex align-items-center gap-1 bg-tertiary p-1 rounded-pill">
-          <button class="btn btn-sm rounded-pill px-3 active-mode" id="pm-mode-text" onclick="setReaderMode('text')">
-            <i class="bi bi-file-text me-1"></i> Text
+        <!-- Left: TOC / Chapter Selector Hamburger Icon -->
+        <div class="dropdown">
+          <button class="btn btn-sm p-0 text-secondary border-0" type="button" id="pm-chapter-dropdown" data-bs-toggle="dropdown" aria-expanded="false" title="Table of Contents">
+            <i class="bi bi-list fs-5"></i>
           </button>
-          <button class="btn btn-sm rounded-pill px-3" id="pm-mode-audio" onclick="setReaderMode('audio')">
-            <i class="bi bi-headphones me-1"></i> Audio
-          </button>
-          <button class="btn btn-sm rounded-pill px-3" id="pm-mode-both" onclick="setReaderMode('both')">
-            <i class="bi bi-lightning-charge-fill me-1 text-warning"></i> Both
-          </button>
+          <ul class="dropdown-menu shadow-lg border-0 py-2" id="pm-chapter-menu" style="max-height: 280px; overflow-y: auto; width: 260px;">
+            <!-- Chapters populated dynamically -->
+          </ul>
         </div>
 
-        <!-- Center: Chapter & Pagination Controls -->
-        <div class="d-flex align-items-center gap-2 my-1">
-          <!-- Chapter Dropdown -->
-          <div class="dropdown">
-            <button class="btn btn-sm btn-outline-secondary rounded-pill dropdown-toggle" type="button" id="pm-chapter-dropdown" data-bs-toggle="dropdown" aria-expanded="false">
-              <i class="bi bi-list-nested me-1"></i> <span id="pm-current-chapter-title">Chapter 1</span>
-            </button>
-            <ul class="dropdown-menu shadow" id="pm-chapter-menu" style="max-height: 250px; overflow-y: auto;">
-              <!-- Chapters populated dynamically -->
-            </ul>
-          </div>
-
-          <!-- Page Navigation -->
-          <div class="d-flex align-items-center gap-2 bg-tertiary px-3 py-1 rounded-pill small fw-semibold">
-            <button class="btn btn-sm p-0 text-secondary border-0" onclick="changeReaderPage(-1)" id="pm-prev-page" title="Previous Page"><i class="bi bi-chevron-left"></i></button>
-            <span><span id="pm-current-page">1</span> / <span id="pm-total-pages">1</span></span>
-            <button class="btn btn-sm p-0 text-secondary border-0" onclick="changeReaderPage(1)" id="pm-next-page" title="Next Page"><i class="bi bi-chevron-right"></i></button>
-          </div>
+        <!-- Center: Page Navigation Pill -->
+        <div class="d-flex align-items-center gap-2 bg-white px-3 py-1 rounded-pill border shadow-2xs small fw-semibold">
+          <button class="btn btn-sm p-0 text-secondary border-0" onclick="changeReaderPage(-1)" id="pm-prev-page" title="Previous Page"><i class="bi bi-chevron-left"></i></button>
+          <span class="px-1"><span id="pm-current-page" class="text-dark">1</span> / <span id="pm-total-pages" class="text-secondary">320</span></span>
+          <button class="btn btn-sm p-0 text-secondary border-0" onclick="changeReaderPage(1)" id="pm-next-page" title="Next Page"><i class="bi bi-chevron-right"></i></button>
         </div>
 
-        <!-- Right: Voice Selector, Text Size, Theme & Bookmarks -->
-        <div class="d-flex align-items-center gap-2 my-1">
+        <!-- Right: Zoom Controls, Bookmark, Night Mode & 3-Dots Options -->
+        <div class="d-flex align-items-center gap-2 text-secondary small">
           
-          <!-- AI Narrator Voice Selector Dropdown (Exact Match to User Requirement) -->
-          <div class="dropdown">
-            <button class="btn btn-sm btn-outline-warning rounded-pill dropdown-toggle fw-bold" type="button" id="pm-voice-dropdown" data-bs-toggle="dropdown" aria-expanded="false">
-              <i class="bi bi-mic-fill me-1"></i> <span id="pm-selected-voice-label">Rachel (AI)</span>
-            </button>
-            <ul class="dropdown-menu dropdown-menu-end shadow" id="pm-voice-menu" style="max-height: 280px; overflow-y: auto;">
-              <li><h6 class="dropdown-header">Select Narrator Voice</h6></li>
-              <li><a class="dropdown-item active" href="#" onclick="selectNarratorVoice('rachel', 'Rachel (Female AI)'); return false;"><i class="bi bi-person-fill text-warning me-2"></i> Rachel (Female - Calming)</a></li>
-              <li><a class="dropdown-item" href="#" onclick="selectNarratorVoice('adam', 'Adam (Male AI)'); return false;"><i class="bi bi-person-fill text-info me-2"></i> Adam (Male - Deep)</a></li>
-              <li><a class="dropdown-item" href="#" onclick="selectNarratorVoice('bella', 'Bella (Female AI)'); return false;"><i class="bi bi-person-fill text-danger me-2"></i> Bella (Female - Expressive)</a></li>
-              <li><a class="dropdown-item" href="#" onclick="selectNarratorVoice('antoni', 'Antoni (Male AI)'); return false;"><i class="bi bi-person-fill text-primary me-2"></i> Antoni (Male - Storyteller)</a></li>
-              <li><hr class="dropdown-divider"></li>
-              <li><h6 class="dropdown-header">Hindi Narrators (हिंदी)</h6></li>
-              <li><a class="dropdown-item" href="#" onclick="selectNarratorVoice('priya', 'Priya (Hindi Female)'); return false;"><i class="bi bi-translate text-success me-2"></i> Priya (हिंदी Female)</a></li>
-              <li><a class="dropdown-item" href="#" onclick="selectNarratorVoice('suresh', 'Suresh (Hindi Male)'); return false;"><i class="bi bi-translate text-warning me-2"></i> Suresh (हिंदी Male)</a></li>
-            </ul>
-          </div>
-
           <!-- Text Zoom Controls -->
-          <div class="d-flex align-items-center bg-tertiary px-2 py-1 rounded-pill small">
-            <button class="btn btn-sm p-0 border-0 me-2 text-secondary" onclick="adjustFontScale(-10)" title="Zoom Out"><i class="bi bi-dash"></i></button>
-            <span id="pm-font-scale">100%</span>
-            <button class="btn btn-sm p-0 border-0 ms-2 text-secondary" onclick="adjustFontScale(10)" title="Zoom In"><i class="bi bi-plus"></i></button>
+          <div class="d-flex align-items-center bg-white px-2 py-1 rounded-pill border">
+            <button class="btn btn-sm p-0 border-0 me-1" onclick="adjustFontScale(-10)" title="Zoom Out"><i class="bi bi-dash"></i></button>
+            <span id="pm-font-scale" class="text-secondary">100%</span>
+            <button class="btn btn-sm p-0 border-0 ms-1" onclick="adjustFontScale(10)" title="Zoom In"><i class="bi bi-plus"></i></button>
           </div>
 
           <!-- Bookmark Toggle -->
-          <button class="btn btn-sm btn-icon-round" id="pm-bookmark-btn" onclick="toggleReaderBookmark()" title="Bookmark Page">
-            <i class="bi bi-bookmark"></i>
+          <button class="btn btn-sm p-0 text-secondary border-0 ms-1" id="pm-bookmark-btn" onclick="toggleReaderBookmark()" title="Bookmark Page">
+            <i class="bi bi-bookmark fs-6"></i>
           </button>
 
           <!-- Night / Theme Mode Toggle -->
-          <button class="btn btn-sm btn-icon-round" id="pm-nightmode-btn" onclick="toggleReaderTheme()" title="Reader Theme (Light / Sepia / Dark)">
-            <i class="bi bi-moon-stars"></i>
+          <button class="btn btn-sm p-0 text-secondary border-0" id="pm-nightmode-btn" onclick="toggleReaderTheme()" title="Reader Theme">
+            <i class="bi bi-moon fs-6"></i>
           </button>
+
+          <!-- 3-Dots Dropdown Options Menu (Voice Selector & Mode Switcher) -->
+          <div class="dropdown">
+            <button class="btn btn-sm p-0 text-secondary border-0" type="button" id="pm-more-options-btn" data-bs-toggle="dropdown" aria-expanded="false" title="More Options & Voice Selector">
+              <i class="bi bi-three-dots-vertical fs-6"></i>
+            </button>
+            <ul class="dropdown-menu dropdown-menu-end shadow-lg border-0 py-2" style="min-width: 250px;">
+              <li><h6 class="dropdown-header text-uppercase fw-bold small">Reader Mode</h6></li>
+              <li class="px-3 mb-2">
+                <div class="btn-group btn-group-sm w-100" role="group">
+                  <button type="button" class="btn btn-outline-primary active" id="pm-mode-text" onclick="setReaderMode('text')">Text</button>
+                  <button type="button" class="btn btn-outline-primary" id="pm-mode-audio" onclick="setReaderMode('audio')">Audio</button>
+                  <button type="button" class="btn btn-outline-primary" id="pm-mode-both" onclick="setReaderMode('both')">Both</button>
+                </div>
+              </li>
+              <li><hr class="dropdown-divider"></li>
+              <li><h6 class="dropdown-header text-uppercase fw-bold small"><i class="bi bi-mic-fill text-warning me-1"></i> AI Narrator Voice</h6></li>
+              <li>
+                <div class="px-3 py-1">
+                  <select class="form-select form-select-sm border-warning" id="pm-voice-dropdown" onchange="selectNarratorVoice(this.value, this.options[this.selectedIndex].text)">
+                    <option value="rachel" selected>Rachel (Female - Calming)</option>
+                    <option value="adam">Adam (Male - Deep)</option>
+                    <option value="bella">Bella (Female - Expressive)</option>
+                    <option value="antoni">Antoni (Male - Storyteller)</option>
+                    <option value="priya">Priya (Hindi Female - हिंदी)</option>
+                    <option value="suresh">Suresh (Hindi Male - हिंदी)</option>
+                  </select>
+                </div>
+              </li>
+            </ul>
+          </div>
+
         </div>
       </div>
 
       <!-- Modal Body (Reader & Audio Player Surface) -->
-      <div class="modal-body pustika-modal-body p-4 position-relative">
+      <div class="modal-body pustika-modal-body p-4 position-relative bg-white" style="min-height: 440px;">
         
         <!-- Persistent Audio Bar (Visible in Audio & Both modes) -->
-        <div class="pustika-audio-control-card p-3 rounded-4 mb-4 shadow-sm d-none" id="pm-audio-player-wrapper">
+        <div class="pustika-audio-control-card p-3 rounded-4 mb-4 shadow-sm d-none bg-light border" id="pm-audio-player-wrapper">
           <div class="d-flex align-items-center justify-content-between gap-3 flex-wrap">
             <div class="d-flex align-items-center gap-3">
               <button class="player-controls-btn player-play-main" id="pm-audio-play-btn" onclick="toggleModalAudioPlayback()">
@@ -122,7 +122,7 @@
             </div>
 
             <!-- Audio Timeline & Seek Slider -->
-            <div class="flex-grow-1 mx-md-3" style="min-width: 200px;">
+            <div class="flex-grow-1 mx-md-3" style="min-width: 180px;">
               <div class="d-flex justify-content-between small text-secondary mb-1">
                 <span id="pm-audio-current-time">00:00</span>
                 <span id="pm-audio-duration">00:00</span>
@@ -134,30 +134,30 @@
             <div class="d-flex align-items-center gap-2">
               <button class="btn btn-sm btn-outline-secondary rounded-pill" onclick="changePlaybackSpeed()" id="pm-speed-btn">1.0x</button>
               <i class="bi bi-volume-up text-secondary fs-5"></i>
-              <input type="range" class="form-range" id="pm-audio-volume" min="0" max="1" step="0.05" value="1" style="width: 70px;" oninput="setModalAudioVolume(this.value)">
+              <input type="range" class="form-range" id="pm-audio-volume" min="0" max="1" step="0.05" value="1" style="width: 60px;" oninput="setModalAudioVolume(this.value)">
             </div>
           </div>
-          <!-- Hidden Audio Element -->
           <audio id="pm-native-audio-player" style="display:none;"></audio>
         </div>
 
-        <!-- Book Text Reading Card Surface -->
-        <div class="pustika-paper-card shadow-sm rounded-4 p-4 p-md-5 mx-auto" id="pm-paper-surface">
-          <div class="text-center mb-4">
-            <span class="badge bg-primary-subtle text-primary rounded-pill px-3 py-1 fw-bold text-uppercase small mb-2" id="pm-chapter-badge">Chapter 1</span>
-            <h2 class="fw-bold font-heading mb-3" id="pm-chapter-heading">Chapter Title</h2>
-            <hr class="w-25 mx-auto opacity-25">
-          </div>
+        <!-- Book Text Reading Card Surface (With Realistic Book Page Turn Animation) -->
+        <div class="book-page-container rounded-4 mx-auto" style="max-width: 850px;">
+          <div class="pustika-paper-card book-page-surface rounded-4 p-4 p-md-4 book-gutter-left" id="pm-paper-surface">
+            <div class="mb-3">
+              <span class="text-primary small fw-bold text-uppercase" id="pm-chapter-badge" style="font-size: 0.8rem; letter-spacing: 0.5px;">CHAPTER 1</span>
+              <h4 class="fw-bold font-heading text-dark mt-1 mb-3" id="pm-chapter-heading" style="font-size: 1.35rem;">Atomic Habits - Chapter 1</h4>
+            </div>
 
-          <!-- Paragraph Text Container -->
-          <div class="pustika-text-content lead" id="pm-text-body" style="font-size: 1.15rem; line-height: 1.85;">
-            <!-- Chapter paragraphs injected here -->
-          </div>
+            <!-- Paragraph Text Container -->
+            <div class="pustika-text-content lead text-dark opacity-90" id="pm-text-body" style="font-size: 1rem; line-height: 1.75; min-height: 200px;">
+              <!-- Chapter paragraphs injected here -->
+            </div>
 
-          <!-- Page Footer Indicator -->
-          <div class="mt-5 pt-4 border-top d-flex justify-content-between text-muted small">
-            <span>Pustika E-Reader</span>
-            <span>Page <span id="pm-footer-page">1</span></span>
+            <!-- Page Footer Indicator -->
+            <div class="mt-4 pt-3 border-top d-flex justify-content-between text-muted small">
+              <span>Pustika E-Reader</span>
+              <span>Page <span id="pm-footer-page">1</span></span>
+            </div>
           </div>
         </div>
 
@@ -166,3 +166,4 @@
     </div>
   </div>
 </div>
+
