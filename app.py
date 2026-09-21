@@ -229,6 +229,8 @@ def create_app():
             user = User.query.filter_by(email=email).first()
             if user and check_password_hash(user.password_hash, password):
                 login_user(user)
+                if user.is_admin:
+                    return redirect(url_for('admin_dashboard'))
                 return redirect(url_for('index'))
             flash("Invalid email or password", "danger")
         return render_template('login.html')
