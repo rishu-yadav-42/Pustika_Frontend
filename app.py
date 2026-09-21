@@ -1,8 +1,13 @@
 import os
-from flask import Flask, render_template, request, redirect, url_for, flash, jsonify
+import re
+from datetime import datetime
+from functools import wraps
+from typing import List, Dict, Any
+from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, send_from_directory
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
+from werkzeug.utils import secure_filename
 
 # ==========================================
 # 1. CONFIGURATION
@@ -44,7 +49,85 @@ class Config:
         UPLOAD_FOLDER = os.path.join(STATIC_FOLDER, 'uploads')
         PDF_UPLOAD_FOLDER = os.path.join(UPLOAD_FOLDER, 'pdfs')
         COVER_UPLOAD_FOLDER = os.path.join(STATIC_FOLDER, 'images', 'covers')
-        AUDIO_FOLDER = os.path.join(STATIC_FOLDER, 'audio')
+    ALLOWED_IMAGE_EXTENSIONS = {'png', 'jpg', 'jpeg', 'webp', 'svg'}
+    ALLOWED_PDF_EXTENSIONS = {'pdf', 'txt', 'epub'}
+
+def allowed_file(filename, allowed_extensions):
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in allowed_extensions
+
+def clean_devanagari_text(t: str) -> str:
+    if not t:
+        return ""
+    t = re.sub(r'([अ-ह])्\s+([अ-ह])', r'\1्\2', t)
+    t = re.sub(r'[ \t]{2,}', ' ', t)
+    return t.strip()
+
+def extract_text_from_pdf(pdf_path: str) -> str:
+    try:
+        import pypdf
+        reader = pypdf.PdfReader(pdf_path)
+        extracted = []
+        for i, page in enumerate(reader.pages):
+            txt = page.extract_text() or ''
+            if txt.strip():
+                extracted.append(f"--- Page {i+1} ---\n{clean_devanagari_text(txt.strip())}")
+        return "\n\n".join(extracted)
+    except Exception as e:
+        print(f"Error reading PDF: {e}")
+        return ""
+
+def auto_split_into_chapters(full_text: str, default_chunk_size: int = 4000) -> List[Dict[str, Any]]:
+    clean_text = re.sub(r'--- Page \d+ ---\n?', '', full_text).strip()
+    if not clean_text:
+        return []
+
+    chapter_pattern = r'(?i)(?:\n|\A)(chapter\s+\d+|chapter\s+[ivxlcdm]+|अध्याय\s+\d+|section\s+\d+|भाग\s+\d+|part\s+\d+)'
+    splits = re.split(chapter_pattern, clean_text)
+    chapters = []
+    if len(splits) > 1:
+        current_title = "Introduction / Preface"
+        current_content = splits[0].strip()
+        if current_content:
+            chapters.append({"chapter_number": 1, "title": current_title, "text_content": current_content})
+        chap_num = len(chapters) + 1
+        for i in range(1, len(splits), 2):
+            chap_heading = splits[i].strip()
+            chap_body = splits[i+1].strip() if (i+1) < len(splits) else ""
+            body_lines = chap_body.split('\n')
+            subtitle = body_lines[0].strip() if body_lines else ""
+            if subtitle and len(subtitle) < 60 and not subtitle.lower().startswith('chapter'):
+                full_chap_title = f"{chap_heading.title()}: {subtitle}"
+                body_content = "\n".join(body_lines[1:]).strip()
+            else:
+                full_chap_title = chap_heading.title()
+                body_content = chap_body
+            if body_content:
+                chapters.append({"chapter_number": chap_num, "title": full_chap_title, "text_content": body_content})
+                chap_num += 1
+    else:
+        paragraphs = clean_text.split('\n\n')
+        current_chunk = []
+        current_length = 0
+        chap_num = 1
+        for para in paragraphs:
+            para_str = para.strip()
+            if not para_str: continue
+            if current_length + len(para_str) > default_chunk_size and current_chunk:
+                chapters.append({"chapter_number": chap_num, "title": f"Chapter {chap_num}", "text_content": "\n\n".join(current_chunk)})
+                chap_num += 1
+                current_chunk = [para_str]
+                current_length = len(para_str)
+            else:
+                current_chunk.append(para_str)
+                current_length += len(para_str)
+        if current_chunk:
+            chapters.append({"chapter_number": chap_num, "title": f"Chapter {chap_num}", "text_content": "\n\n".join(current_chunk)})
+    return chapters
+
+def extract_chapters_from_pdf(pdf_path: str) -> List[Dict[str, Any]]:
+    full_text = extract_text_from_pdf(pdf_path)
+    if not full_text: return []
+    return auto_split_into_chapters(full_text)
 
 # ==========================================
 # 2. DATABASE MODELS FOR FRONTEND RENDERING
@@ -77,8 +160,11 @@ class Book(db.Model):
     cover_image = db.Column(db.String(255), nullable=True, default='covers/default.jpg')
     pdf_file = db.Column(db.String(255), nullable=True)
     category_id = db.Column(db.Integer, db.ForeignKey('categories.id'), nullable=True)
+    language = db.Column(db.String(50), default='English')
+    is_featured = db.Column(db.Boolean, default=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
     category = db.relationship('Category', lazy=True)
-    chapters = db.relationship('Chapter', backref='book', lazy=True)
+    chapters = db.relationship('Chapter', backref='book', lazy=True, cascade='all, delete-orphan')
 
 class Chapter(db.Model):
     __tablename__ = 'chapters'
@@ -87,6 +173,7 @@ class Chapter(db.Model):
     chapter_number = db.Column(db.Integer, nullable=False)
     title = db.Column(db.String(200), nullable=False)
     text_content = db.Column(db.Text, nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
 class Favorite(db.Model):
     __tablename__ = 'favorites'
@@ -281,13 +368,233 @@ def create_app():
         logout_user()
         return redirect(url_for('index'))
 
+    # --- ADMIN ROUTES FOR ADDING AND MANAGING BOOKS ---
     @app.route('/admin')
     def admin_dashboard():
+        if not current_user.is_authenticated or not current_user.is_admin:
+            flash("Admin access required. Please sign in with admin credentials.", "warning")
+            return redirect(url_for('login'))
         try:
-            books = Book.query.all()
+            total_books = Book.query.count()
+            total_users = User.query.count()
+            total_chapters = Chapter.query.count()
+            recent_books = Book.query.order_by(Book.id.desc()).limit(6).all()
+            categories = Category.query.all()
+            latest_users = User.query.order_by(User.id.desc()).limit(5).all()
         except Exception:
-            books = []
-        return render_template('admin/dashboard.html', books=books)
+            total_books = 0
+            total_users = 0
+            total_chapters = 0
+            recent_books = []
+            categories = []
+            latest_users = []
+
+        return render_template(
+            'admin/dashboard.html',
+            total_books=total_books,
+            total_users=total_users,
+            total_chapters=total_chapters,
+            total_audios=0,
+            recent_books=recent_books,
+            categories=categories,
+            latest_users=latest_users
+        )
+
+    @app.route('/admin/book/new', methods=['GET', 'POST'])
+    def book_create():
+        if not current_user.is_authenticated or not current_user.is_admin:
+            return redirect(url_for('login'))
+        categories = Category.query.all()
+        if request.method == 'POST':
+            title = request.form.get('title', '').strip()
+            author = request.form.get('author', '').strip()
+            description = request.form.get('description', '').strip()
+            category_id = request.form.get('category_id', type=int)
+            language = request.form.get('language', 'English').strip()
+            is_featured = True if request.form.get('is_featured') else False
+            pasted_text = request.form.get('pasted_text', '').strip()
+
+            if not title or not author:
+                flash('Title and Author are required.', 'danger')
+                return render_template('admin/book_form.html', categories=categories, book=None)
+
+            cover_filename = 'covers/default.jpg'
+            if 'cover_image' in request.files:
+                file = request.files['cover_image']
+                if file and file.filename and allowed_file(file.filename, Config.ALLOWED_IMAGE_EXTENSIONS):
+                    cover_filename = f"cover_{secure_filename(file.filename)}"
+                    try:
+                        os.makedirs(Config.COVER_UPLOAD_FOLDER, exist_ok=True)
+                        file.save(os.path.join(Config.COVER_UPLOAD_FOLDER, cover_filename))
+                    except Exception as e:
+                        print(f"Cover save error: {e}")
+
+            pdf_filename = None
+            if 'pdf_file' in request.files:
+                file = request.files['pdf_file']
+                if file and file.filename and allowed_file(file.filename, Config.ALLOWED_PDF_EXTENSIONS):
+                    pdf_filename = f"pdf_{secure_filename(file.filename)}"
+                    try:
+                        os.makedirs(Config.PDF_UPLOAD_FOLDER, exist_ok=True)
+                        full_pdf_path = os.path.join(Config.PDF_UPLOAD_FOLDER, pdf_filename)
+                        file.save(full_pdf_path)
+                    except Exception as e:
+                        print(f"PDF save error: {e}")
+
+            new_book = Book(
+                title=title,
+                author=author,
+                description=description,
+                category_id=category_id,
+                language=language,
+                cover_image=cover_filename,
+                pdf_file=pdf_filename,
+                is_featured=is_featured
+            )
+            db.session.add(new_book)
+            db.session.commit()
+
+            if pdf_filename:
+                full_pdf_path = os.path.join(Config.PDF_UPLOAD_FOLDER, pdf_filename)
+                extracted_chaps = extract_chapters_from_pdf(full_pdf_path)
+                if extracted_chaps:
+                    for c_info in extracted_chaps:
+                        db.session.add(Chapter(book_id=new_book.id, chapter_number=c_info['chapter_number'], title=c_info['title'], text_content=c_info['text_content']))
+                    db.session.commit()
+                    flash(f'Book "{title}" created! Extracted {len(extracted_chaps)} chapters from file.', 'success')
+                else:
+                    db.session.add(Chapter(book_id=new_book.id, chapter_number=1, title="Chapter 1", text_content=description or f"Welcome to {title}."))
+                    db.session.commit()
+                    flash(f'Book "{title}" created! (Add chapters in editor)', 'success')
+            elif pasted_text:
+                chap_list = auto_split_into_chapters(pasted_text)
+                for c_info in chap_list:
+                    db.session.add(Chapter(book_id=new_book.id, chapter_number=c_info['chapter_number'], title=c_info['title'], text_content=c_info['text_content']))
+                db.session.commit()
+                flash(f'Book "{title}" created with {len(chap_list)} chapters.', 'success')
+            else:
+                db.session.add(Chapter(book_id=new_book.id, chapter_number=1, title="Chapter 1", text_content=description or f"Welcome to {title}."))
+                db.session.commit()
+                flash(f'Book "{title}" created successfully! Add more chapters below.', 'success')
+
+            return redirect(url_for('chapter_editor', book_id=new_book.id))
+        return render_template('admin/book_form.html', categories=categories, book=None)
+
+    @app.route('/admin/book/edit/<int:book_id>', methods=['GET', 'POST'])
+    def book_edit(book_id):
+        if not current_user.is_authenticated or not current_user.is_admin:
+            return redirect(url_for('login'))
+        book = Book.query.get_or_404(book_id)
+        categories = Category.query.all()
+        if request.method == 'POST':
+            book.title = request.form.get('title', '').strip() or book.title
+            book.author = request.form.get('author', '').strip() or book.author
+            book.description = request.form.get('description', '').strip()
+            cat_id = request.form.get('category_id', type=int)
+            if cat_id: book.category_id = cat_id
+            book.language = request.form.get('language', 'English').strip()
+            book.is_featured = True if request.form.get('is_featured') else False
+            if 'cover_image' in request.files:
+                file = request.files['cover_image']
+                if file and file.filename and allowed_file(file.filename, Config.ALLOWED_IMAGE_EXTENSIONS):
+                    cover_filename = f"cover_{secure_filename(file.filename)}"
+                    try:
+                        os.makedirs(Config.COVER_UPLOAD_FOLDER, exist_ok=True)
+                        file.save(os.path.join(Config.COVER_UPLOAD_FOLDER, cover_filename))
+                        book.cover_image = cover_filename
+                    except Exception as e:
+                        print(f"Cover update error: {e}")
+            db.session.commit()
+            flash(f'Book "{book.title}" updated successfully!', 'success')
+            return redirect(url_for('admin_dashboard'))
+        return render_template('admin/book_form.html', categories=categories, book=book)
+
+    @app.route('/admin/book/delete/<int:book_id>', methods=['POST'])
+    def book_delete(book_id):
+        if not current_user.is_authenticated or not current_user.is_admin:
+            return redirect(url_for('login'))
+        book = Book.query.get_or_404(book_id)
+        title = book.title
+        db.session.delete(book)
+        db.session.commit()
+        flash(f'Book "{title}" deleted successfully.', 'info')
+        return redirect(url_for('admin_dashboard'))
+
+    @app.route('/admin/book/<int:book_id>/chapters', methods=['GET', 'POST'])
+    def chapter_editor(book_id):
+        if not current_user.is_authenticated or not current_user.is_admin:
+            return redirect(url_for('login'))
+        book = Book.query.get_or_404(book_id)
+        if request.method == 'POST':
+            action = request.form.get('action')
+            if action == 'add_chapter':
+                title = request.form.get('title', 'New Chapter').strip()
+                content = request.form.get('text_content', '').strip()
+                chap_num = len(book.chapters) + 1
+                db.session.add(Chapter(book_id=book.id, chapter_number=chap_num, title=title, text_content=content))
+                db.session.commit()
+                flash(f'Added Chapter "{title}".', 'success')
+            elif action == 'add_multiple_chapters':
+                titles = request.form.getlist('titles[]')
+                contents = request.form.getlist('contents[]')
+                added_count = 0
+                for t, c in zip(titles, contents):
+                    t_clean = t.strip() if t else f"Chapter {len(book.chapters) + 1}"
+                    c_clean = c.strip() if c else ""
+                    if t_clean or c_clean:
+                        db.session.add(Chapter(book_id=book.id, chapter_number=len(book.chapters) + 1, title=t_clean, text_content=c_clean))
+                        db.session.commit()
+                        added_count += 1
+                flash(f'Successfully added {added_count} chapter(s)!', 'success')
+            elif action == 'edit_chapter':
+                chap_id = request.form.get('chapter_id', type=int)
+                chap = Chapter.query.get(chap_id)
+                if chap and chap.book_id == book.id:
+                    chap.title = request.form.get('title', chap.title).strip()
+                    chap.text_content = request.form.get('text_content', chap.text_content).strip()
+                    db.session.commit()
+                    flash(f'Chapter "{chap.title}" updated.', 'success')
+            elif action == 'delete_chapter':
+                chap_id = request.form.get('chapter_id', type=int)
+                chap = Chapter.query.get(chap_id)
+                if chap and chap.book_id == book.id:
+                    db.session.delete(chap)
+                    db.session.commit()
+                    flash('Chapter deleted.', 'info')
+            return redirect(url_for('chapter_editor', book_id=book.id))
+        return render_template('admin/chapter_editor.html', book=book)
+
+    @app.route('/admin/book/<int:book_id>/pdf-extract', methods=['GET', 'POST'])
+    def pdf_extract_review(book_id):
+        if not current_user.is_authenticated or not current_user.is_admin:
+            return redirect(url_for('login'))
+        book = Book.query.get_or_404(book_id)
+        if not book.pdf_file:
+            flash('No PDF file uploaded for this book.', 'warning')
+            return redirect(url_for('book_edit', book_id=book.id))
+        pdf_full_path = os.path.join(Config.PDF_UPLOAD_FOLDER, book.pdf_file)
+        extracted_text = extract_text_from_pdf(pdf_full_path) if os.path.exists(pdf_full_path) else ""
+        if request.method == 'POST':
+            edited_text = request.form.get('extracted_text', '').strip()
+            auto_split = True if request.form.get('auto_split') else False
+            Chapter.query.filter_by(book_id=book.id).delete()
+            db.session.commit()
+            if auto_split and edited_text:
+                for c_info in auto_split_into_chapters(edited_text):
+                    db.session.add(Chapter(book_id=book.id, chapter_number=c_info['chapter_number'], title=c_info['title'], text_content=c_info['text_content']))
+            elif edited_text:
+                db.session.add(Chapter(book_id=book.id, chapter_number=1, title="Full Book Text", text_content=edited_text))
+            db.session.commit()
+            flash('Extracted text saved into chapters successfully!', 'success')
+            return redirect(url_for('chapter_editor', book_id=book.id))
+        return render_template('admin/pdf_extract.html', book=book, extracted_text=extracted_text, parsed_chapters=auto_split_into_chapters(extracted_text) if extracted_text else [])
+
+    @app.route('/admin/book/<int:book_id>/tts', methods=['GET', 'POST'])
+    def tts_generate(book_id):
+        if not current_user.is_authenticated or not current_user.is_admin:
+            return redirect(url_for('login'))
+        book = Book.query.get_or_404(book_id)
+        return redirect(url_for('chapter_editor', book_id=book.id))
 
     @app.route('/favicon.ico')
     def favicon():
@@ -420,6 +727,23 @@ def create_app():
 
     with app.app_context():
         db.create_all()
+        try:
+            admin_email = "rishuyadav962@gmail.com"
+            admin_user = User.query.filter_by(email=admin_email).first()
+            if not admin_user:
+                admin_user = User(
+                    username='Shatrughan Yadav',
+                    email=admin_email,
+                    password_hash=generate_password_hash('Rishu@123'),
+                    is_admin=True
+                )
+                db.session.add(admin_user)
+            else:
+                admin_user.is_admin = True
+                admin_user.password_hash = generate_password_hash('Rishu@123')
+            db.session.commit()
+        except Exception as e:
+            print(f"seed_admin error: {e}")
 
     return app
 
