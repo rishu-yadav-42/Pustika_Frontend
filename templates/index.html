@@ -32,28 +32,32 @@
         </div>
     </div>
 
-    <!-- Horizontal Category Filter Pills (Exact Match with Icons) -->
+    <!-- Horizontal Category Filter Pills (Dynamic from Database) -->
     <div class="d-flex flex-nowrap overflow-auto gap-2 mb-4 pb-1 no-scrollbar align-items-center">
-        <a href="{{ url_for('books_catalog') }}" class="btn btn-sm mobile-cat-pill active flex-shrink-0">All</a>
-        <a href="{{ url_for('books_catalog', category=1) }}" class="btn btn-sm mobile-cat-pill flex-shrink-0"><i class="bi bi-book me-1"></i> Fiction</a>
-        <a href="{{ url_for('books_catalog', category=2) }}" class="btn btn-sm mobile-cat-pill flex-shrink-0"><i class="bi bi-lightbulb me-1"></i> Self-Help</a>
-        <a href="{{ url_for('books_catalog', category=4) }}" class="btn btn-sm mobile-cat-pill flex-shrink-0"><i class="bi bi-laptop me-1"></i> Tech</a>
-        <a href="{{ url_for('books_catalog') }}" class="btn btn-sm mobile-cat-pill flex-shrink-0"><i class="bi bi-three-dots me-1"></i> More</a>
+        <a href="{{ url_for('index') }}" class="btn btn-sm mobile-cat-pill {% if not selected_category %}active{% endif %} flex-shrink-0">All</a>
+        {% for cat in categories %}
+        <a href="{{ url_for('index', category=cat.id) }}" class="btn btn-sm mobile-cat-pill {% if selected_category == cat.id %}active{% endif %} flex-shrink-0">
+            {{ cat.name }}
+        </a>
+        {% endfor %}
+        <a href="{{ url_for('books_catalog') }}" class="btn btn-sm mobile-cat-pill flex-shrink-0"><i class="bi bi-grid me-1"></i> Catalog</a>
     </div>
 
-    <!-- Popular Books Section (Exact Match) -->
+    <!-- Popular Books Section (All Books with Newest First) -->
     <div class="mb-4">
         <div class="d-flex justify-content-between align-items-center mb-3">
-            <h5 class="fw-bold text-white mb-0 font-heading fs-5">Popular Books</h5>
-            <a href="{{ url_for('books_catalog') }}" class="text-amber-link small fw-bold text-decoration-none">See All <i class="bi bi-arrow-right"></i></a>
+            <h5 class="fw-bold text-white mb-0 font-heading fs-5">
+                {% if selected_category %}Category Books ({{ all_books|length }}){% else %}Popular & Latest Books{% endif %}
+            </h5>
+            <a href="{{ url_for('books_catalog', category=selected_category) if selected_category else url_for('books_catalog') }}" class="text-amber-link small fw-bold text-decoration-none">See All <i class="bi bi-arrow-right"></i></a>
         </div>
 
         <!-- Horizontal Scrollable Popular Books Grid -->
         <div class="d-flex gap-3 overflow-auto pb-2 no-scrollbar">
-            {% for book in shelf1_books %}
+            {% for book in all_books %}
             <div class="mobile-book-card flex-shrink-0">
                 <div class="mobile-cover-container mb-2" onclick="openPustikaBookModal({{ book.id }}, 'text')">
-                    <img src="{{ url_for('static', filename='images/covers/' + book.cover_image) }}" class="mobile-book-cover" alt="{{ book.title }}">
+                    <img src="{{ url_for('static', filename='images/covers/' + book.cover_image) }}" class="mobile-book-cover" alt="{{ book.title }}" onerror="this.src='/static/images/covers/default_cover.jpg'">
                 </div>
                 <h6 class="mobile-book-title text-truncate mb-0" title="{{ book.title }}">{{ book.title }}</h6>
                 <p class="mobile-book-author text-truncate small mb-1">{{ book.author }}</p>
@@ -61,7 +65,7 @@
                 <!-- Rating badge -->
                 <div class="d-flex align-items-center gap-1 small text-amber-gold mb-2" style="font-size: 0.75rem;">
                     <i class="bi bi-star-fill text-warning"></i>
-                    <span class="fw-bold">{% if loop.index == 1 %}4.8{% elif loop.index == 2 %}4.7{% elif loop.index == 3 %}4.6{% else %}4.6{% endif %}</span>
+                    <span class="fw-bold">4.8</span>
                 </div>
 
                 <!-- Dual Read & Listen Action Buttons -->
@@ -74,6 +78,8 @@
                     </button>
                 </div>
             </div>
+            {% else %}
+            <div class="text-muted small py-3 px-2">No books found in this category.</div>
             {% endfor %}
         </div>
     </div>
@@ -190,75 +196,51 @@
                 <p class="lead text-amber-subtle fs-6 mb-0">Discover Books. Explore Ideas. Build a Better You.</p>
             </div>
 
-            <!-- Category Filter Pills -->
+            <!-- Category Filter Pills (Dynamic from Database) -->
             <div class="d-flex flex-wrap gap-2 mb-4 align-items-center ps-2">
-                <a href="{{ url_for('books_catalog') }}" class="btn btn-sm cat-pill-active rounded-pill px-4 fw-bold shadow-sm">All</a>
-                <a href="{{ url_for('books_catalog', category=1) }}" class="btn btn-sm cat-pill rounded-pill px-3">Fiction</a>
-                <a href="{{ url_for('books_catalog', category=2) }}" class="btn btn-sm cat-pill rounded-pill px-3">Self-Help</a>
-                <a href="{{ url_for('books_catalog', category=4) }}" class="btn btn-sm cat-pill rounded-pill px-3">Technology</a>
-                <a href="{{ url_for('books_catalog', category=3) }}" class="btn btn-sm cat-pill rounded-pill px-3">History</a>
-                <a href="{{ url_for('books_catalog') }}" class="btn btn-sm cat-pill rounded-pill px-3">Education</a>
-                <a href="{{ url_for('books_catalog') }}" class="btn btn-sm cat-pill rounded-pill px-3">Motivation</a>
-                <a href="{{ url_for('books_catalog') }}" class="btn btn-sm cat-pill rounded-pill px-3">More <i class="bi bi-chevron-down ms-1"></i></a>
+                <a href="{{ url_for('index') }}" class="btn btn-sm {% if not selected_category %}cat-pill-active fw-bold shadow-sm{% else %}cat-pill{% endif %} rounded-pill px-4">All</a>
+                {% for cat in categories %}
+                <a href="{{ url_for('index', category=cat.id) }}" class="btn btn-sm {% if selected_category == cat.id %}cat-pill-active fw-bold shadow-sm{% else %}cat-pill{% endif %} rounded-pill px-3">
+                    {{ cat.name }}
+                </a>
+                {% endfor %}
+                <a href="{{ url_for('books_catalog') }}" class="btn btn-sm cat-pill rounded-pill px-3 text-warning">
+                    <i class="bi bi-grid-3x3-gap me-1"></i> Catalog View
+                </a>
             </div>
 
-            <!-- Realistic 3D Wooden Bookshelf Canvas Container -->
+            <!-- Realistic 3D Wooden Bookshelf Canvas Container (Dynamic Shelves for ALL Books) -->
             <div class="bookshelf-frame-wrapper shadow-2xl position-relative mb-4">
                 <div class="bookshelf-wood-case">
                     
-                    <!-- Shelf 1 (Top Shelf - 5 Books) -->
-                    <div class="bookshelf-shelf-tier">
-                        <div class="row row-cols-5 g-2 g-md-3 justify-content-center px-3">
-                            {% for book in shelf1_books %}
-                            <div class="col text-center">
-                                <div class="shelf-book-wrapper" onclick="selectBookForReader({{ book.id }})" title="Click to read {{ book.title }}">
-                                    <img src="{{ url_for('static', filename='images/covers/' + book.cover_image) }}" class="shelf-book-cover" alt="{{ book.title }}">
-                                    <div class="shelf-book-meta mt-2">
-                                        <div class="shelf-book-title text-truncate">{{ book.title }}</div>
-                                        <div class="shelf-book-author text-truncate">{{ book.author }}</div>
+                    {% if shelves %}
+                        {% for shelf in shelves %}
+                        <!-- Shelf Tier {{ loop.index }} (5 Books per Tier) -->
+                        <div class="bookshelf-shelf-tier {% if not loop.first %}mt-4{% endif %}">
+                            <div class="row row-cols-5 g-2 g-md-3 justify-content-center px-3">
+                                {% for book in shelf %}
+                                <div class="col text-center">
+                                    <div class="shelf-book-wrapper" onclick="selectBookForReader({{ book.id }})" title="Click to read {{ book.title }}">
+                                        <img src="{{ url_for('static', filename='images/covers/' + book.cover_image) }}" class="shelf-book-cover" alt="{{ book.title }}" onerror="this.src='/static/images/covers/default_cover.jpg'">
+                                        <div class="shelf-book-meta mt-2">
+                                            <div class="shelf-book-title text-truncate">{{ book.title }}</div>
+                                            <div class="shelf-book-author text-truncate">{{ book.author }}</div>
+                                        </div>
                                     </div>
                                 </div>
+                                {% endfor %}
                             </div>
-                            {% endfor %}
+                            <div class="shelf-wood-plank"></div>
                         </div>
-                        <div class="shelf-wood-plank"></div>
-                    </div>
-
-                    <!-- Shelf 2 (Middle Shelf - 5 Books) -->
-                    <div class="bookshelf-shelf-tier mt-4">
-                        <div class="row row-cols-5 g-2 g-md-3 justify-content-center px-3">
-                            {% for book in shelf2_books %}
-                            <div class="col text-center">
-                                <div class="shelf-book-wrapper" onclick="selectBookForReader({{ book.id }})" title="Click to read {{ book.title }}">
-                                    <img src="{{ url_for('static', filename='images/covers/' + book.cover_image) }}" class="shelf-book-cover" alt="{{ book.title }}">
-                                    <div class="shelf-book-meta mt-2">
-                                        <div class="shelf-book-title text-truncate">{{ book.title }}</div>
-                                        <div class="shelf-book-author text-truncate">{{ book.author }}</div>
-                                    </div>
-                                </div>
-                            </div>
-                            {% endfor %}
+                        {% endfor %}
+                    {% else %}
+                        <div class="text-center py-5 text-white">
+                            <i class="bi bi-journal-x display-4 text-warning"></i>
+                            <h5 class="fw-bold mt-3">No books found in this category</h5>
+                            <p class="text-light-amber small mb-3">Try choosing another category or clearing filters.</p>
+                            <a href="{{ url_for('index') }}" class="btn btn-sm btn-warning text-dark fw-bold rounded-pill px-4">Show All Books</a>
                         </div>
-                        <div class="shelf-wood-plank"></div>
-                    </div>
-
-                    <!-- Shelf 3 (Bottom Shelf - 5 Books) -->
-                    <div class="bookshelf-shelf-tier mt-4">
-                        <div class="row row-cols-5 g-2 g-md-3 justify-content-center px-3">
-                            {% for book in shelf3_books %}
-                            <div class="col text-center">
-                                <div class="shelf-book-wrapper" onclick="selectBookForReader({{ book.id }})" title="Click to read {{ book.title }}">
-                                    <img src="{{ url_for('static', filename='images/covers/' + book.cover_image) }}" class="shelf-book-cover" alt="{{ book.title }}">
-                                    <div class="shelf-book-meta mt-2">
-                                        <div class="shelf-book-title text-truncate">{{ book.title }}</div>
-                                        <div class="shelf-book-author text-truncate">{{ book.author }}</div>
-                                    </div>
-                                </div>
-                            </div>
-                            {% endfor %}
-                        </div>
-                        <div class="shelf-wood-plank"></div>
-                    </div>
+                    {% endif %}
 
                 </div>
 

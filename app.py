@@ -30,6 +30,9 @@ def get_db_uri_and_args():
                 except Exception as e:
                     print(f"Error copying database: {e}")
             return f"sqlite:///{tmp_db}", {}
+        parent_db = os.path.abspath(os.path.join(BASE_DIR, '..', 'database.db'))
+        if os.path.exists(parent_db):
+            return f"sqlite:///{parent_db}", {}
         return f"sqlite:///{os.path.join(BASE_DIR, 'database.db')}", {}
         
     if db_url.startswith("postgres://") or db_url.startswith("postgresql://") or db_url.startswith("postgresql+"):
@@ -64,7 +67,15 @@ class Config:
         UPLOAD_FOLDER = os.path.join(STATIC_FOLDER, 'uploads')
         PDF_UPLOAD_FOLDER = os.path.join(UPLOAD_FOLDER, 'pdfs')
         COVER_UPLOAD_FOLDER = os.path.join(STATIC_FOLDER, 'images', 'covers')
-    ALLOWED_IMAGE_EXTENSIONS = {'png', 'jpg', 'jpeg', 'webp', 'svg'}
+        AUDIO_FOLDER = os.path.join(STATIC_FOLDER, 'audio')
+    
+    MAX_CONTENT_LENGTH = 500 * 1024 * 1024  # 500MB
+    MAX_FORM_MEMORY_SIZE = 50 * 1024 * 1024 # 50MB
+    
+    ELEVENLABS_API_KEY = os.getenv('ELEVENLABS_API_KEY', '')
+    ELEVENLABS_VOICE_ID = os.getenv('ELEVENLABS_VOICE_ID', '21m00Tcm4TlvDq8ikWAM')
+    
+    ALLOWED_IMAGE_EXTENSIONS = {'png', 'jpg', 'jpeg', 'webp', 'svg', 'jfif', 'gif', 'bmp'}
     ALLOWED_PDF_EXTENSIONS = {'pdf', 'txt', 'epub'}
 
 def allowed_file(filename, allowed_extensions):
@@ -419,26 +430,87 @@ def create_app():
 
     @app.route('/')
     def index():
+        category_id = request.args.get('category', type=int)
+        query_text = request.args.get('q', '').strip()
+        
         try:
-            all_books = Book.query.order_by(Book.id.asc()).all()
+            books_query = Book.query
+            if category_id:
+                books_query = books_query.filter_by(category_id=category_id)
+            if query_text:
+                search_filter = f"%{query_text}%"
+                books_query = books_query.filter(
+                    (Book.title.ilike(search_filter)) | 
+                    (Book.author.ilike(search_filter)) | 
+                    (Book.description.ilike(search_filter))
+                )
+            
+            # Order newest first so any added book is immediately at the top
+            all_books = books_query.order_by(Book.id.desc()).all()
             categories = Category.query.all()
         except Exception:
             all_books = []
             categories = []
-        shelf1_books = all_books[0:5] if len(all_books) >= 5 else all_books
-        shelf2_books = all_books[5:10] if len(all_books) >= 10 else []
-        shelf3_books = all_books[10:15] if len(all_books) >= 15 else []
-        return render_template('index.html', shelf1_books=shelf1_books, shelf2_books=shelf2_books, shelf3_books=shelf3_books, all_books=all_books, categories=categories)
+
+        # Dynamic shelves of 5 books per tier (all books displayed!)
+        shelves = [all_books[i:i+5] for i in range(0, len(all_books), 5)] if all_books else []
+        shelf1_books = shelves[0] if len(shelves) > 0 else []
+        shelf2_books = shelves[1] if len(shelves) > 1 else []
+        shelf3_books = shelves[2] if len(shelves) > 2 else []
+
+        return render_template(
+            'index.html',
+            shelves=shelves,
+            shelf1_books=shelf1_books,
+            shelf2_books=shelf2_books,
+            shelf3_books=shelf3_books,
+            all_books=all_books,
+            categories=categories,
+            selected_category=category_id,
+            selected_q=query_text
+        )
 
     @app.route('/books')
     def books_catalog():
+        query_text = request.args.get('q', '').strip()
+        category_id = request.args.get('category', type=int)
+        language = request.args.get('language', '').strip()
+        author = request.args.get('author', '').strip()
+        
         try:
-            all_books = Book.query.all()
+            books_query = Book.query
+            if query_text:
+                search_filter = f"%{query_text}%"
+                books_query = books_query.filter(
+                    (Book.title.ilike(search_filter)) | 
+                    (Book.author.ilike(search_filter)) | 
+                    (Book.description.ilike(search_filter))
+                )
+            if category_id:
+                books_query = books_query.filter_by(category_id=category_id)
+            if language:
+                books_query = books_query.filter(Book.language.ilike(f"%{language}%"))
+            if author:
+                books_query = books_query.filter(Book.author.ilike(f"%{author}%"))
+                
+            books = books_query.order_by(Book.id.desc()).all()
             categories = Category.query.all()
+            authors = [a[0] for a in db.session.query(Book.author).distinct().all() if a[0]]
         except Exception:
-            all_books = []
+            books = []
             categories = []
-        return render_template('books.html', books=all_books, categories=categories)
+            authors = []
+
+        return render_template(
+            'books.html',
+            books=books,
+            categories=categories,
+            authors=authors,
+            selected_q=query_text,
+            selected_category=category_id,
+            selected_language=language,
+            selected_author=author
+        )
 
     @app.route('/book/<int:book_id>')
     def book_detail(book_id):
@@ -610,7 +682,10 @@ def create_app():
                 flash('Title and Author are required.', 'danger')
                 return render_template('admin/book_form.html', categories=categories, book=None)
 
-            cover_filename = 'covers/default.jpg'
+            if not category_id:
+                category_id = categories[0].id if categories else 1
+
+            cover_filename = 'default_cover.jpg'
             if 'cover_image' in request.files:
                 file = request.files['cover_image']
                 if file and file.filename and allowed_file(file.filename, Config.ALLOWED_IMAGE_EXTENSIONS):
@@ -648,12 +723,16 @@ def create_app():
 
             if pdf_filename:
                 full_pdf_path = os.path.join(Config.PDF_UPLOAD_FOLDER, pdf_filename)
-                extracted_pages = extract_pages_from_pdf(full_pdf_path)
+                try:
+                    extracted_pages = extract_pages_from_pdf(full_pdf_path)
+                except Exception as e:
+                    print(f"PDF extraction error: {e}")
+                    extracted_pages = []
                 if extracted_pages:
-                    for p_info in extracted_pages:
+                    for p_info in extracted_pages[:100]:  # Cap at 100 to avoid request timeout
                         db.session.add(Chapter(book_id=new_book.id, chapter_number=p_info['page_number'], title=p_info['title'], text_content=p_info['text_content']))
                     db.session.commit()
-                    flash(f'Book "{title}" created! Loaded all {len(extracted_pages)} PDF pages sequentially.', 'success')
+                    flash(f'Book "{title}" created! Loaded {min(len(extracted_pages), 100)} PDF pages sequentially.', 'success')
                 else:
                     db.session.add(Chapter(book_id=new_book.id, chapter_number=1, title="Page 1", text_content=description or f"Welcome to {title}."))
                     db.session.commit()
@@ -667,9 +746,9 @@ def create_app():
             else:
                 db.session.add(Chapter(book_id=new_book.id, chapter_number=1, title="Chapter 1", text_content=description or f"Welcome to {title}."))
                 db.session.commit()
-                flash(f'Book "{title}" created successfully! Add more chapters below.', 'success')
+                flash(f'Book "{title}" created successfully!', 'success')
 
-            return redirect(url_for('chapter_editor', book_id=new_book.id))
+            return redirect(url_for('admin_dashboard'))
         return render_template('admin/book_form.html', categories=categories, book=None)
 
     @app.route('/admin/book/edit/<int:book_id>', methods=['GET', 'POST'])
