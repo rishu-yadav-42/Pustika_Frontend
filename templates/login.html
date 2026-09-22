@@ -25,10 +25,18 @@
                     </div>
 
                     <div class="mb-3">
-                        <label class="form-label fw-semibold">Password</label>
+                        <div class="d-flex justify-content-between align-items-center mb-1">
+                            <label class="form-label fw-semibold mb-0">Password</label>
+                            <button type="button" class="btn btn-sm btn-link text-decoration-none p-0 text-primary small" onclick="fillAdminCredentials()" title="Auto-fill Admin details">
+                                <i class="bi bi-shield-check me-1"></i>Fill Admin Info
+                            </button>
+                        </div>
                         <div class="input-group">
                             <span class="input-group-text bg-tertiary border-0"><i class="bi bi-lock"></i></span>
-                            <input type="password" name="password" class="form-control" placeholder="••••••••" required>
+                            <input type="password" name="password" id="passwordInput" class="form-control" placeholder="••••••••" required>
+                            <button class="btn btn-outline-secondary border-0 bg-light" type="button" id="togglePasswordBtn" onclick="togglePasswordVisibility()" title="Show/Hide Password">
+                                <i class="bi bi-eye" id="togglePasswordIcon"></i>
+                            </button>
                         </div>
                     </div>
 
@@ -36,6 +44,10 @@
                         <div class="form-check">
                             <input class="form-check-input" type="checkbox" name="remember" id="rememberCheck">
                             <label class="form-check-label small" for="rememberCheck">Remember me</label>
+                        </div>
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" id="showPasswordSwitch" onchange="togglePasswordVisibilitySwitch(this)">
+                            <label class="form-check-label small text-muted" for="showPasswordSwitch">Show Password</label>
                         </div>
                     </div>
 
@@ -45,8 +57,97 @@
                 <div class="text-center mt-4 text-secondary small">
                     Don't have an account? <a href="{{ url_for('register') }}" class="fw-bold">Register Now</a>
                 </div>
+
+                <!-- Admin Credentials Quick Helper Card -->
+                <div class="mt-4 p-3 bg-light rounded-3 border text-start small">
+                    <div class="d-flex justify-content-between align-items-center mb-1">
+                        <strong class="text-dark"><i class="bi bi-shield-lock text-warning me-1"></i> Admin Credentials:</strong>
+                        <span class="badge bg-primary-subtle text-primary">Admin Access</span>
+                    </div>
+                    <div class="text-muted"><strong>Email:</strong> <code>rishuyadav962@gmail.com</code></div>
+                    <div class="text-muted d-flex align-items-center justify-content-between mt-1">
+                        <div><strong>Password:</strong> <span id="adminPwdDisplay">••••••••</span></div>
+                        <button class="btn btn-sm btn-outline-secondary py-0 px-2" type="button" onclick="toggleAdminPwdHelp()">
+                            <i class="bi bi-eye" id="adminPwdEyeIcon"></i> Show
+                        </button>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
 </div>
+
+<script>
+function togglePasswordVisibility() {
+    const pwdInput = document.getElementById('passwordInput');
+    const icon = document.getElementById('togglePasswordIcon');
+    const switchEl = document.getElementById('showPasswordSwitch');
+    if (pwdInput.type === 'password') {
+        pwdInput.type = 'text';
+        if (icon) {
+            icon.classList.remove('bi-eye');
+            icon.classList.add('bi-eye-slash');
+        }
+        if (switchEl) switchEl.checked = true;
+    } else {
+        pwdInput.type = 'password';
+        if (icon) {
+            icon.classList.remove('bi-eye-slash');
+            icon.classList.add('bi-eye');
+        }
+        if (switchEl) switchEl.checked = false;
+    }
+}
+
+function togglePasswordVisibilitySwitch(switchEl) {
+    const pwdInput = document.getElementById('passwordInput');
+    const icon = document.getElementById('togglePasswordIcon');
+    if (switchEl.checked) {
+        pwdInput.type = 'text';
+        if (icon) {
+            icon.classList.remove('bi-eye');
+            icon.classList.add('bi-eye-slash');
+        }
+    } else {
+        pwdInput.type = 'password';
+        if (icon) {
+            icon.classList.remove('bi-eye-slash');
+            icon.classList.add('bi-eye');
+        }
+    }
+}
+
+function fillAdminCredentials() {
+    const loginInput = document.querySelector('input[name="login_input"]');
+    const pwdInput = document.getElementById('passwordInput');
+    if (loginInput) loginInput.value = 'rishuyadav962@gmail.com';
+    if (pwdInput) {
+        pwdInput.value = 'Rishu@123';
+        pwdInput.type = 'text';
+        const icon = document.getElementById('togglePasswordIcon');
+        if (icon) {
+            icon.classList.remove('bi-eye');
+            icon.classList.add('bi-eye-slash');
+        }
+        const switchEl = document.getElementById('showPasswordSwitch');
+        if (switchEl) switchEl.checked = true;
+    }
+}
+
+let adminPwdShown = false;
+function toggleAdminPwdHelp() {
+    const display = document.getElementById('adminPwdDisplay');
+    const icon = document.getElementById('adminPwdEyeIcon');
+    adminPwdShown = !adminPwdShown;
+    if (adminPwdShown) {
+        display.innerHTML = '<code class="text-primary fw-bold">Rishu@123</code>';
+        icon.classList.remove('bi-eye');
+        icon.classList.add('bi-eye-slash');
+    } else {
+        display.innerText = '••••••••';
+        icon.classList.remove('bi-eye-slash');
+        icon.classList.add('bi-eye');
+    }
+}
+</script>
 {% endblock %}

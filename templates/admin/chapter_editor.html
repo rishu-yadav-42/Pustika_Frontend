@@ -222,13 +222,17 @@
     <div class="modal-dialog">
         <div class="modal-content glass-card">
             <div class="modal-header">
-                <h5 class="modal-title fw-bold"><i class="bi bi-file-earmark-pdf text-danger me-2"></i> Import Chapters from PDF File</h5>
+                <h5 class="modal-title fw-bold"><i class="bi bi-file-earmark-pdf text-danger me-2"></i> Import Pages from PDF File</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <form action="{{ url_for('chapter_editor', book_id=book.id) }}" method="POST" enctype="multipart/form-data">
                 <div class="modal-body">
                     <input type="hidden" name="action" value="upload_pdf_chapters">
                     
+                    <div class="alert alert-info py-2 small mb-3">
+                        <i class="bi bi-info-circle-fill me-1"></i> <strong>Page-by-Page 1:1 Extraction:</strong> Every page of the PDF will be imported sequentially as an individual page with its exact content.
+                    </div>
+
                     <div class="mb-3">
                         <label class="form-label fw-bold">Select PDF File (.pdf)</label>
                         <input type="file" name="pdf_file" class="form-control" accept=".pdf" required>
@@ -237,22 +241,22 @@
                     <div class="mb-3">
                         <label class="form-label fw-bold">Import Option</label>
                         <div class="form-check">
-                            <input class="form-check-input" type="radio" name="mode" id="modeAppend" value="append" checked>
-                            <label class="form-check-label" for="modeAppend">
-                                Append to existing chapters (Keep current chapters)
+                            <input class="form-check-input" type="radio" name="mode" id="modeReplace" value="replace" checked>
+                            <label class="form-check-label" for="modeReplace">
+                                Replace existing pages with PDF pages (Exact sequence)
                             </label>
                         </div>
                         <div class="form-check">
-                            <input class="form-check-input" type="radio" name="mode" id="modeReplace" value="replace">
-                            <label class="form-check-label" for="modeReplace">
-                                Replace all existing chapters with PDF chapters
+                            <input class="form-check-input" type="radio" name="mode" id="modeAppend" value="append">
+                            <label class="form-check-label" for="modeAppend">
+                                Append to existing pages
                             </label>
                         </div>
                     </div>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn btn-warning fw-bold"><i class="bi bi-upload me-1"></i> Parse & Save PDF Chapters</button>
+                    <button type="submit" class="btn btn-warning fw-bold"><i class="bi bi-upload me-1"></i> Import & Save All PDF Pages</button>
                 </div>
             </form>
         </div>

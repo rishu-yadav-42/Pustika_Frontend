@@ -1195,3 +1195,53 @@ a:hover {
   transition: background-color 0.3s ease;
 }
 
+/* ==========================================
+   Live Narrator Word-by-Word Highlighting & Hover
+   ========================================== */
+.narrator-word {
+  display: inline;
+  border-radius: 4px;
+  padding: 1px 3px;
+  margin: 0 1px;
+  transition: background-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
+  cursor: pointer;
+}
+
+.narrator-word:hover {
+  background-color: rgba(245, 158, 11, 0.22);
+  color: #b45309;
+  border-radius: 4px;
+}
+
+.narrator-active-word {
+  background: linear-gradient(135deg, #f59e0b, #d97706) !important;
+  color: #ffffff !important;
+  font-weight: 700 !important;
+  border-radius: 5px !important;
+  padding: 2px 6px !important;
+  box-shadow: 0 2px 10px rgba(245, 158, 11, 0.5) !important;
+  transform: scale(1.03);
+  display: inline-block;
+}
+
+.theme-night .narrator-word:hover,
+.theme-dark .narrator-word:hover,
+[data-theme="dark"] .narrator-word:hover {
+  background-color: rgba(245, 158, 11, 0.3);
+  color: #fde047;
+}
+
+.theme-night .narrator-active-word,
+.theme-dark .narrator-active-word,
+[data-theme="dark"] .narrator-active-word {
+  background: linear-gradient(135deg, #d97706, #b45309) !important;
+  color: #ffffff !important;
+  box-shadow: 0 2px 10px rgba(217, 119, 6, 0.6) !important;
+}
+
+.theme-sepia .narrator-active-word {
+  background: linear-gradient(135deg, #b45309, #78350f) !important;
+  color: #fffbeb !important;
+}
+
+

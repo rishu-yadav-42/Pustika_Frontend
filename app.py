@@ -55,11 +55,122 @@ class Config:
 def allowed_file(filename, allowed_extensions):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in allowed_extensions
 
+def patch_pypdf_devanagari():
+    try:
+        import pypdf._font
+        if getattr(pypdf._font, '_devanagari_patched', False):
+            return
+        orig_get_encoding = pypdf._font.get_encoding
+
+        def patched_get_encoding(font_dict):
+            enc, cmap = orig_get_encoding(font_dict)
+            if isinstance(cmap, dict):
+                if chr(0x00A1) in cmap and cmap[chr(0x00A1)] == ' ':
+                    cmap[chr(0x00A1)] = 'ह'
+                if chr(0x01D3) in cmap and cmap[chr(0x01D3)] == ' ':
+                    cmap[chr(0x01D3)] = 'ध'
+                if chr(0x01D0) in cmap and cmap[chr(0x01D0)] == 'र':
+                    cmap[chr(0x01D0)] = 'र्'
+                for code in (0x0367, 0x0368, 0x0369, 0x036A, 0x036B, 0x036C, 0x01D1):
+                    if chr(code) in cmap:
+                        cmap[chr(code)] = 'ि'
+            return enc, cmap
+
+        pypdf._font.get_encoding = patched_get_encoding
+        pypdf._font._devanagari_patched = True
+    except Exception as e:
+        print(f"pypdf font patch error: {e}")
+
+patch_pypdf_devanagari()
+
+
 def clean_devanagari_text(t: str) -> str:
+    """
+    Comprehensive Devanagari text normalization and repair engine for PDF extractions.
+    Fixes split conjuncts, misplaced pre-base matras, font encoding artifacts, and ligatures.
+    """
     if not t:
         return ""
-    t = re.sub(r'([अ-ह])्\s+([अ-ह])', r'\1्\2', t)
+
+    # 1. Join split conjunct consonants (e.g. 'स् त्री' -> 'स्त्री', 'व्य व' -> 'व्यव', 'प्र स' -> 'प्रस')
+    t = re.sub(r'([क-हक़-य़])्\s+([क-हक़-य़])', r'\1्\2', t)
+
+    # 2. Reorder pre-base 'ि' (chhoti ee matra) to logically follow the consonant/conjunct
+    t = re.sub(r'ि\s*([क-हक़-य़](?:्[क-हक़-य़])*)', r'\1ि', t)
+
+    # 3. Clean duplicate or misplaced matras and candrabindus
+    t = re.sub(r'ूूँ', 'ूँ', t)
+    t = re.sub(r'ूँूँ', 'ूँ', t)
+    t = re.sub(r'ूूं', 'ूं', t)
+    t = re.sub(r'ाूँ', 'ाँ', t)
+    t = re.sub(r'ाूं', 'ाँ', t)
+    t = re.sub(r'हँ\b', 'हूँ', t)
+
+    # 4. Contextual & lexical repairs for legacy PDF font extraction artifacts
+    fixes = [
+        ('धिनया', 'धनिया'),
+        ('िधनिया', 'धनिया'),
+        ('ि नया', 'धनिया'),
+        ('झुर्रयों', 'झुर्रियों'),
+        ('झुररयों', 'झुर्रियों'),
+        ('ससकोड़कर', 'सिकोड़कर'),
+        ('मासलक', 'मालिक'),
+        ('धचन्ता', 'चिंता'),
+        ('चिन्ता', 'चिंता'),
+        ('किरि गये', 'किधर गये'),
+        ('ककिर गये', 'किधर गये'),
+        ('किर गये', 'किधर गये'),
+        ('िरि भी', 'फिर भी'),
+        ('ििर भी', 'फिर भी'),
+        ('परसाद', 'प्रसाद'),
+        ('गददन', 'गर्दन'),
+        ('मुश्ककल', 'मुश्किल'),
+        ('मुश्िकल', 'मुश्किल'),
+        ('धछड़ा', 'छिड़ा'),
+        ('छड़ा', 'छिड़ा'),
+        ('श्ज़न्दा', 'ज़िंदा'),
+        ('सोल ', 'सोलह '),
+        ('लड़ककयाूँ', 'लड़कियाँ'),
+        ('लड़ककयाँ', 'लड़कियाँ'),
+        ('लड़िकयाँ', 'लड़कियाँ'),
+        ('गाूँव', 'गाँव'),
+        ('गाँवह', 'गाँव'),
+        ('पाूँवों', 'पाँवों'),
+        ('टाूँग', 'टाँग'),
+        ('दाूँत', 'दाँत'),
+        ('लौटँ', 'लौटूँ'),
+        (' ोरीराम', ' होरीराम'),
+        (' ोरी', ' होरी'),
+        (' ाथ', ' हाथ'),
+        ('क ती', 'कहती'),
+        (' ूूँ', ' हूँ'),
+        (' ूँ', ' हूँ'),
+        ('व्यव ार', 'व्यवहार'),
+        ('समलते', 'मिलते'),
+        ('ववचार', 'विचार'),
+        ('वववाह त', 'विवाहित'),
+        ('विवाह त', 'विवाहित'),
+        ('ववषय', 'विषय'),
+        ('तर ', 'तरह '),
+        ('चा े', 'चाहे'),
+        ('चाे', 'चाहे'),
+        (' ार', ' हार'),
+        ('हदन', 'दिन'),
+        ('र ता', 'रहता'),
+        ('र ने', 'रहने'),
+        ('स लाने', 'सहलाने'),
+        ('स लायें', 'सहलायें'),
+        ('ककस', 'किस'),
+        ('ककतनी', 'कितनी'),
+        ('ककतना', 'कितना'),
+        ('कक', 'कि'),
+    ]
+    for k, v in fixes:
+        t = t.replace(k, v)
+
+    # 5. Collapse excessive whitespace
     t = re.sub(r'[ \t]{2,}', ' ', t)
+    t = re.sub(r'\n{3,}', '\n\n', t)
     return t.strip()
 
 def extract_text_from_pdf(pdf_path: str) -> str:
@@ -123,6 +234,61 @@ def auto_split_into_chapters(full_text: str, default_chunk_size: int = 4000) -> 
         if current_chunk:
             chapters.append({"chapter_number": chap_num, "title": f"Chapter {chap_num}", "text_content": "\n\n".join(current_chunk)})
     return chapters
+
+def extract_pages_from_pdf(pdf_path: str) -> List[Dict[str, Any]]:
+    """
+    Extracts pages 1:1 from PDF file without converting or clustering into chapters.
+    Each PDF page maps directly to an e-book page in exact sequence.
+    Uses patched pypdf to ensure accurate Devanagari Unicode extraction.
+    """
+    pages_list = []
+    try:
+        import pypdf
+        reader = pypdf.PdfReader(pdf_path)
+        for page_idx, page in enumerate(reader.pages):
+            page_text = page.extract_text() or ''
+            cleaned = clean_devanagari_text(page_text.strip()) if page_text.strip() else ""
+            pages_list.append({
+                "page_number": page_idx + 1,
+                "title": f"Page {page_idx + 1}",
+                "text_content": cleaned if cleaned else f"[Page {page_idx + 1}]"
+            })
+        if pages_list:
+            return pages_list
+    except Exception as e:
+        print(f"pypdf extraction error, trying pdfplumber: {e}")
+
+    try:
+        import pdfplumber
+        with pdfplumber.open(pdf_path) as pdf:
+            for page_idx, page in enumerate(pdf.pages):
+                page_text = page.extract_text(layout=False) or ''
+                cleaned = clean_devanagari_text(page_text.strip()) if page_text.strip() else ""
+                pages_list.append({
+                    "page_number": page_idx + 1,
+                    "title": f"Page {page_idx + 1}",
+                    "text_content": cleaned if cleaned else f"[Page {page_idx + 1}]"
+                })
+        if pages_list:
+            return pages_list
+    except Exception as e:
+        print(f"pdfplumber extraction fallback to pypdf: {e}")
+
+    try:
+        import pypdf
+        reader = pypdf.PdfReader(pdf_path)
+        for page_idx, page in enumerate(reader.pages):
+            page_text = page.extract_text() or ''
+            cleaned = clean_devanagari_text(page_text.strip()) if page_text.strip() else ""
+            pages_list.append({
+                "page_number": page_idx + 1,
+                "title": f"Page {page_idx + 1}",
+                "text_content": cleaned if cleaned else f"[Page {page_idx + 1}]"
+            })
+    except Exception as e:
+        print(f"Error reading PDF pages with pypdf: {e}")
+
+    return pages_list
 
 def extract_chapters_from_pdf(pdf_path: str) -> List[Dict[str, Any]]:
     full_text = extract_text_from_pdf(pdf_path)
@@ -271,10 +437,12 @@ def create_app():
         book = Book.query.get(book_id)
         if not book:
             return redirect(url_for('books_catalog'))
-        chapter_id = request.args.get('chapter', 1, type=int)
-        current_chapter = Chapter.query.filter_by(book_id=book_id, chapter_number=chapter_id).first()
+        page_num = request.args.get('page', None, type=int)
+        chapter_id = request.args.get('chapter', None, type=int)
+        target_num = page_num or chapter_id or 1
+        current_chapter = Chapter.query.filter_by(book_id=book_id, chapter_number=target_num).first()
         if not current_chapter and book.chapters:
-            current_chapter = book.chapters[0]
+            current_chapter = sorted(book.chapters, key=lambda c: c.chapter_number)[0]
         return render_template('reader.html', book=book, current_chapter=current_chapter)
 
     @app.route('/audio-player/<int:book_id>')
@@ -385,6 +553,7 @@ def create_app():
             total_users = User.query.count()
             total_chapters = Chapter.query.count()
             recent_books = Book.query.order_by(Book.id.desc()).limit(6).all()
+            all_books = Book.query.order_by(Book.id.desc()).all()
             categories = Category.query.all()
             latest_users = User.query.order_by(User.id.desc()).limit(5).all()
         except Exception:
@@ -392,6 +561,7 @@ def create_app():
             total_users = 0
             total_chapters = 0
             recent_books = []
+            all_books = []
             categories = []
             latest_users = []
 
@@ -402,6 +572,7 @@ def create_app():
             total_chapters=total_chapters,
             total_audios=0,
             recent_books=recent_books,
+            all_books=all_books,
             categories=categories,
             latest_users=latest_users
         )
@@ -462,16 +633,16 @@ def create_app():
 
             if pdf_filename:
                 full_pdf_path = os.path.join(Config.PDF_UPLOAD_FOLDER, pdf_filename)
-                extracted_chaps = extract_chapters_from_pdf(full_pdf_path)
-                if extracted_chaps:
-                    for c_info in extracted_chaps:
-                        db.session.add(Chapter(book_id=new_book.id, chapter_number=c_info['chapter_number'], title=c_info['title'], text_content=c_info['text_content']))
+                extracted_pages = extract_pages_from_pdf(full_pdf_path)
+                if extracted_pages:
+                    for p_info in extracted_pages:
+                        db.session.add(Chapter(book_id=new_book.id, chapter_number=p_info['page_number'], title=p_info['title'], text_content=p_info['text_content']))
                     db.session.commit()
-                    flash(f'Book "{title}" created! Extracted {len(extracted_chaps)} chapters from file.', 'success')
+                    flash(f'Book "{title}" created! Loaded all {len(extracted_pages)} PDF pages sequentially.', 'success')
                 else:
-                    db.session.add(Chapter(book_id=new_book.id, chapter_number=1, title="Chapter 1", text_content=description or f"Welcome to {title}."))
+                    db.session.add(Chapter(book_id=new_book.id, chapter_number=1, title="Page 1", text_content=description or f"Welcome to {title}."))
                     db.session.commit()
-                    flash(f'Book "{title}" created! (Add chapters in editor)', 'success')
+                    flash(f'Book "{title}" created! (Add pages in editor)', 'success')
             elif pasted_text:
                 chap_list = auto_split_into_chapters(pasted_text)
                 for c_info in chap_list:
@@ -510,6 +681,20 @@ def create_app():
                         book.cover_image = cover_filename
                     except Exception as e:
                         print(f"Cover update error: {e}")
+            if 'pdf_file' in request.files:
+                file = request.files['pdf_file']
+                if file and file.filename and allowed_file(file.filename, Config.ALLOWED_PDF_EXTENSIONS):
+                    pdf_filename = f"pdf_{secure_filename(file.filename)}"
+                    full_pdf_path = os.path.join(Config.PDF_UPLOAD_FOLDER, pdf_filename)
+                    file.save(full_pdf_path)
+                    book.pdf_file = pdf_filename
+                    extracted_pages = extract_pages_from_pdf(full_pdf_path)
+                    if extracted_pages:
+                        Chapter.query.filter_by(book_id=book.id).delete()
+                        for p_info in extracted_pages:
+                            db.session.add(Chapter(book_id=book.id, chapter_number=p_info['page_number'], title=p_info['title'], text_content=p_info['text_content']))
+                        db.session.commit()
+                        flash(f'PDF updated and {len(extracted_pages)} exact pages loaded sequentially.', 'success')
             db.session.commit()
             flash(f'Book "{book.title}" updated successfully!', 'success')
             return redirect(url_for('admin_dashboard'))
@@ -521,9 +706,33 @@ def create_app():
             return redirect(url_for('login'))
         book = Book.query.get_or_404(book_id)
         title = book.title
-        db.session.delete(book)
-        db.session.commit()
-        flash(f'Book "{title}" deleted successfully.', 'info')
+        try:
+            # Delete related favorites and history
+            Favorite.query.filter_by(book_id=book.id).delete()
+            ReadingHistory.query.filter_by(book_id=book.id).delete()
+
+            # Delete uploaded files if present
+            if book.pdf_file:
+                pdf_path = os.path.join(Config.PDF_UPLOAD_FOLDER, book.pdf_file)
+                if os.path.exists(pdf_path):
+                    try:
+                        os.remove(pdf_path)
+                    except Exception:
+                        pass
+            if book.cover_image and book.cover_image != 'default_cover.jpg':
+                cover_path = os.path.join(Config.COVER_UPLOAD_FOLDER, book.cover_image)
+                if os.path.exists(cover_path):
+                    try:
+                        os.remove(cover_path)
+                    except Exception:
+                        pass
+
+            db.session.delete(book)
+            db.session.commit()
+            flash(f'Book "{title}" removed successfully.', 'success')
+        except Exception as e:
+            db.session.rollback()
+            flash(f'Error removing book: {str(e)}', 'danger')
         return redirect(url_for('admin_dashboard'))
 
     @app.route('/admin/book/<int:book_id>/chapters', methods=['GET', 'POST'])
@@ -552,6 +761,29 @@ def create_app():
                         db.session.commit()
                         added_count += 1
                 flash(f'Successfully added {added_count} chapter(s)!', 'success')
+            elif action in ('upload_pdf_chapters', 'upload_pdf_pages'):
+                if 'pdf_file' in request.files:
+                    file = request.files['pdf_file']
+                    mode = request.form.get('mode', 'replace')
+                    if file and file.filename and allowed_file(file.filename, Config.ALLOWED_PDF_EXTENSIONS):
+                        pdf_filename = f"pdf_{secure_filename(file.filename)}"
+                        full_pdf_path = os.path.join(Config.PDF_UPLOAD_FOLDER, pdf_filename)
+                        file.save(full_pdf_path)
+                        book.pdf_file = pdf_filename
+                        extracted_pages = extract_pages_from_pdf(full_pdf_path)
+                        if mode == 'replace':
+                            Chapter.query.filter_by(book_id=book.id).delete()
+                            db.session.commit()
+                        start_num = len(book.chapters) if mode == 'append' else 0
+                        for p_info in extracted_pages:
+                            db.session.add(Chapter(
+                                book_id=book.id,
+                                chapter_number=start_num + p_info['page_number'],
+                                title=p_info['title'],
+                                text_content=p_info['text_content']
+                            ))
+                        db.session.commit()
+                        flash(f'Successfully loaded all {len(extracted_pages)} PDF pages sequentially 1:1 without grouping into chapters!', 'success')
             elif action == 'edit_chapter':
                 chap_id = request.form.get('chapter_id', type=int)
                 chap = Chapter.query.get(chap_id)
@@ -579,21 +811,15 @@ def create_app():
             flash('No PDF file uploaded for this book.', 'warning')
             return redirect(url_for('book_edit', book_id=book.id))
         pdf_full_path = os.path.join(Config.PDF_UPLOAD_FOLDER, book.pdf_file)
-        extracted_text = extract_text_from_pdf(pdf_full_path) if os.path.exists(pdf_full_path) else ""
+        pages = extract_pages_from_pdf(pdf_full_path) if os.path.exists(pdf_full_path) else []
         if request.method == 'POST':
-            edited_text = request.form.get('extracted_text', '').strip()
-            auto_split = True if request.form.get('auto_split') else False
             Chapter.query.filter_by(book_id=book.id).delete()
+            for p_info in pages:
+                db.session.add(Chapter(book_id=book.id, chapter_number=p_info['page_number'], title=p_info['title'], text_content=p_info['text_content']))
             db.session.commit()
-            if auto_split and edited_text:
-                for c_info in auto_split_into_chapters(edited_text):
-                    db.session.add(Chapter(book_id=book.id, chapter_number=c_info['chapter_number'], title=c_info['title'], text_content=c_info['text_content']))
-            elif edited_text:
-                db.session.add(Chapter(book_id=book.id, chapter_number=1, title="Full Book Text", text_content=edited_text))
-            db.session.commit()
-            flash('Extracted text saved into chapters successfully!', 'success')
+            flash(f'All {len(pages)} PDF pages saved sequentially!', 'success')
             return redirect(url_for('chapter_editor', book_id=book.id))
-        return render_template('admin/pdf_extract.html', book=book, extracted_text=extracted_text, parsed_chapters=auto_split_into_chapters(extracted_text) if extracted_text else [])
+        return render_template('admin/pdf_extract.html', book=book, pages=pages, extracted_text="\n\n".join([f"--- Page {p['page_number']} ---\n{p['text_content']}" for p in pages]))
 
     @app.route('/admin/book/<int:book_id>/tts', methods=['GET', 'POST'])
     def tts_generate(book_id):
@@ -638,6 +864,8 @@ def create_app():
                     'audio': audio_info
                 })
 
+            is_pdf_book = bool(book.pdf_file) or (len(chapters_data) > 0 and chapters_data[0]['title'].startswith('Page '))
+
             return jsonify({
                 'id': book.id,
                 'title': book.title,
@@ -648,10 +876,33 @@ def create_app():
                 'cover_url': f"/static/images/covers/{book.cover_image}",
                 'is_favorited': is_fav,
                 'has_audio': any(c.get('audio') is not None for c in chapters_data),
+                'is_pdf': is_pdf_book,
+                'total_pages': len(chapters_data),
                 'last_chapter_id': last_chap_id,
                 'last_page': last_page,
                 'last_audio_pos': last_audio_pos,
                 'chapters': chapters_data
+            })
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
+
+    @app.route('/api/book/<int:book_id>/pages')
+    def get_book_pages(book_id):
+        try:
+            book = Book.query.get_or_404(book_id)
+            pages_list = []
+            for chap in sorted(book.chapters, key=lambda c: c.chapter_number):
+                pages_list.append({
+                    'id': chap.id,
+                    'page_number': chap.chapter_number,
+                    'title': chap.title,
+                    'text_content': chap.text_content
+                })
+            return jsonify({
+                'book_id': book.id,
+                'title': book.title,
+                'total_pages': len(pages_list),
+                'pages': pages_list
             })
         except Exception as e:
             return jsonify({'error': str(e)}), 500

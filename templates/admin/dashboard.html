@@ -150,8 +150,8 @@
                             </div>
                             <div>
                                 <small class="text-muted d-block fw-semibold" style="font-size: 0.8rem;">Total Books</small>
-                                <h3 class="fw-bold text-dark mb-0">1,245</h3>
-                                <small class="text-success fw-bold" style="font-size: 0.75rem;"><i class="bi bi-arrow-up-short"></i> +12% <span class="text-muted fw-normal">vs last month</span></small>
+                                <h3 class="fw-bold text-dark mb-0">{{ total_books }}</h3>
+                                <small class="text-success fw-bold" style="font-size: 0.75rem;"><i class="bi bi-check2-circle"></i> In Library</small>
                             </div>
                         </div>
                     </div>
@@ -166,40 +166,40 @@
                             </div>
                             <div>
                                 <small class="text-muted d-block fw-semibold" style="font-size: 0.8rem;">Total Users</small>
-                                <h3 class="fw-bold text-dark mb-0">8,963</h3>
-                                <small class="text-success fw-bold" style="font-size: 0.75rem;"><i class="bi bi-arrow-up-short"></i> +18% <span class="text-muted fw-normal">vs last month</span></small>
+                                <h3 class="fw-bold text-dark mb-0">{{ total_users }}</h3>
+                                <small class="text-primary fw-bold" style="font-size: 0.75rem;"><i class="bi bi-people-fill"></i> Registered</small>
                             </div>
                         </div>
                     </div>
                 </div>
 
-                <!-- Audiobooks -->
+                <!-- Total Pages / Chapters -->
                 <div class="col">
                     <div class="card border-0 rounded-4 shadow-sm p-3 bg-white h-100">
                         <div class="d-flex align-items-center gap-3">
                             <div class="stat-icon-badge bg-danger bg-opacity-10 text-danger">
-                                <i class="bi bi-headphones fs-4"></i>
+                                <i class="bi bi-journal-text fs-4"></i>
                             </div>
                             <div>
-                                <small class="text-muted d-block fw-semibold" style="font-size: 0.8rem;">Audiobooks</small>
-                                <h3 class="fw-bold text-dark mb-0">812</h3>
-                                <small class="text-success fw-bold" style="font-size: 0.75rem;"><i class="bi bi-arrow-up-short"></i> +25% <span class="text-muted fw-normal">vs last month</span></small>
+                                <small class="text-muted d-block fw-semibold" style="font-size: 0.8rem;">Total Pages</small>
+                                <h3 class="fw-bold text-dark mb-0">{{ total_chapters }}</h3>
+                                <small class="text-danger fw-bold" style="font-size: 0.75rem;"><i class="bi bi-layers"></i> Loaded Pages</small>
                             </div>
                         </div>
                     </div>
                 </div>
 
-                <!-- Total Reads / Plays -->
+                <!-- Audiobooks / TTS -->
                 <div class="col">
                     <div class="card border-0 rounded-4 shadow-sm p-3 bg-white h-100">
                         <div class="d-flex align-items-center gap-3">
                             <div class="stat-icon-badge bg-purple bg-opacity-10 text-purple">
-                                <i class="bi bi-eye fs-4"></i>
+                                <i class="bi bi-headphones fs-4"></i>
                             </div>
                             <div>
-                                <small class="text-muted d-block fw-semibold" style="font-size: 0.8rem;">Total Reads / Plays</small>
-                                <h3 class="fw-bold text-dark mb-0">45,231</h3>
-                                <small class="text-success fw-bold" style="font-size: 0.75rem;"><i class="bi bi-arrow-up-short"></i> +32% <span class="text-muted fw-normal">vs last month</span></small>
+                                <small class="text-muted d-block fw-semibold" style="font-size: 0.8rem;">Audio / TTS</small>
+                                <h3 class="fw-bold text-dark mb-0">{{ total_audios if total_audios > 0 else 'Live TTS' }}</h3>
+                                <small class="text-success fw-bold" style="font-size: 0.75rem;"><i class="bi bi-broadcast"></i> Narrator Ready</small>
                             </div>
                         </div>
                     </div>
@@ -289,12 +289,21 @@
 
                         <div class="d-flex gap-3 overflow-auto pb-2 no-scrollbar">
                             {% for book in recent_books %}
-                            <div class="admin-recent-book-card text-center flex-shrink-0" style="width: 110px;">
-                                <img src="{{ url_for('static', filename='images/covers/' + book.cover_image) }}" class="rounded-3 shadow-sm mb-2" style="width: 100%; aspect-ratio: 2/3; object-fit: cover;">
+                            <div class="admin-recent-book-card text-center flex-shrink-0 position-relative" style="width: 120px;">
+                                <div class="position-relative overflow-hidden rounded-3 shadow-sm mb-2" style="aspect-ratio: 2/3;">
+                                    <img src="{{ url_for('static', filename='images/covers/' + book.cover_image) }}" style="width: 100%; height: 100%; object-fit: cover;" onerror="this.src='/static/images/covers/default_cover.jpg'">
+                                    <div class="position-absolute bottom-0 start-0 end-0 bg-dark bg-opacity-75 p-1 d-flex justify-content-center gap-1">
+                                        <a href="{{ url_for('book_edit', book_id=book.id) }}" class="btn btn-sm btn-light p-1 rounded-circle" style="width: 26px; height: 26px; line-height: 1;" title="Edit Book">
+                                            <i class="bi bi-pencil" style="font-size: 0.75rem;"></i>
+                                        </a>
+                                        <button type="button" class="btn btn-sm btn-danger p-1 rounded-circle" style="width: 26px; height: 26px; line-height: 1;" onclick="confirmDeleteBook({{ book.id }}, '{{ book.title|replace('\'', '\\\'') }}')" title="Remove Book">
+                                            <i class="bi bi-trash3" style="font-size: 0.75rem;"></i>
+                                        </button>
+                                    </div>
+                                </div>
                                 <div class="fw-bold text-dark text-truncate small" style="font-size: 0.8rem;">{{ book.title }}</div>
                                 <div class="text-muted text-truncate" style="font-size: 0.7rem;">{{ book.author }}</div>
-                                <div class="badge bg-secondary bg-opacity-10 text-secondary mt-1" style="font-size: 0.65rem;">E-book + Audio</div>
-                                <div class="mt-1"><span class="badge bg-success bg-opacity-25 text-success" style="font-size: 0.65rem;">Published</span></div>
+                                <div class="badge bg-secondary bg-opacity-10 text-secondary mt-1" style="font-size: 0.65rem;">{{ book.chapters|length }} Pages</div>
                             </div>
                             {% endfor %}
                         </div>
@@ -369,6 +378,101 @@
                                 </div>
                                 <span class="fw-bold text-secondary small">8.2K</span>
                             </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- All Books Management Section -->
+            <div class="row g-4 mb-4">
+                <div class="col-12">
+                    <div class="card border-0 rounded-4 shadow-sm p-4 bg-white">
+                        <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-4">
+                            <div>
+                                <div class="d-flex align-items-center gap-2">
+                                    <h5 class="fw-bold text-dark mb-0">Book Management</h5>
+                                    <span class="badge bg-amber-light text-amber-dark rounded-pill fw-bold">{{ all_books|length if all_books else total_books }} Books</span>
+                                </div>
+                                <small class="text-muted">Manage, edit, read, or remove books and their pages</small>
+                            </div>
+                            <div class="d-flex gap-2">
+                                <input type="text" id="adminBookSearch" class="form-control form-control-sm rounded-pill px-3" placeholder="Search book or author..." style="width: 220px;" oninput="filterAdminBooks(this.value)">
+                                <a href="{{ url_for('book_create') }}" class="btn btn-sm admin-action-btn-primary rounded-pill px-3 d-flex align-items-center gap-1">
+                                    <i class="bi bi-plus-lg"></i> Add Book
+                                </a>
+                            </div>
+                        </div>
+
+                        <div class="table-responsive">
+                            <table class="table align-middle table-hover small mb-0" id="adminBooksTable">
+                                <thead class="table-light rounded-3">
+                                    <tr class="text-muted text-uppercase" style="font-size: 0.72rem; letter-spacing: 0.5px;">
+                                        <th>Book</th>
+                                        <th>Category</th>
+                                        <th>Language</th>
+                                        <th>Pages</th>
+                                        <th>Type</th>
+                                        <th class="text-end">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% if all_books %}
+                                        {% for book in all_books %}
+                                        <tr class="admin-book-row" data-title="{{ book.title|lower }}" data-author="{{ book.author|lower }}">
+                                            <td>
+                                                <div class="d-flex align-items-center gap-3">
+                                                    <img src="{{ url_for('static', filename='images/covers/' + book.cover_image) }}" class="rounded-2 shadow-xs" style="width: 38px; height: 52px; object-fit: cover;" onerror="this.src='/static/images/covers/default_cover.jpg'">
+                                                    <div>
+                                                        <div class="fw-bold text-dark text-truncate" style="max-width: 240px;">{{ book.title }}</div>
+                                                        <small class="text-muted">{{ book.author }}</small>
+                                                    </div>
+                                                </div>
+                                            </td>
+                                            <td>
+                                                <span class="badge bg-light text-dark border">{{ book.category.name if book.category else 'General' }}</span>
+                                            </td>
+                                            <td>
+                                                <span class="text-secondary fw-semibold">{{ book.language }}</span>
+                                            </td>
+                                            <td>
+                                                <span class="badge bg-primary bg-opacity-10 text-primary fw-bold px-2 py-1 rounded-pill">
+                                                    {{ book.chapters|length }} Pages
+                                                </span>
+                                            </td>
+                                            <td>
+                                                {% if book.pdf_file %}
+                                                <span class="badge bg-danger bg-opacity-10 text-danger border border-danger-subtle"><i class="bi bi-file-earmark-pdf me-1"></i>PDF</span>
+                                                {% else %}
+                                                <span class="badge bg-secondary bg-opacity-10 text-secondary">Manual</span>
+                                                {% endif %}
+                                            </td>
+                                            <td class="text-end">
+                                                <div class="d-inline-flex gap-1">
+                                                    <a href="{{ url_for('reader', book_id=book.id) }}" class="btn btn-sm btn-outline-primary rounded-pill px-2 py-1" title="Read Page by Page">
+                                                        <i class="bi bi-book me-1"></i> Read
+                                                    </a>
+                                                    <a href="{{ url_for('chapter_editor', book_id=book.id) }}" class="btn btn-sm btn-outline-secondary rounded-pill px-2 py-1" title="Manage Pages">
+                                                        <i class="bi bi-file-earmark-text"></i>
+                                                    </a>
+                                                    <a href="{{ url_for('book_edit', book_id=book.id) }}" class="btn btn-sm btn-outline-secondary rounded-pill px-2 py-1" title="Edit Book Info">
+                                                        <i class="bi bi-pencil"></i>
+                                                    </a>
+                                                    <button type="button" class="btn btn-sm btn-outline-danger rounded-pill px-2 py-1" onclick="confirmDeleteBook({{ book.id }}, '{{ book.title|replace('\'', '\\\'') }}')" title="Remove Book">
+                                                        <i class="bi bi-trash3-fill me-1"></i> Remove
+                                                    </button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                        {% endfor %}
+                                    {% else %}
+                                        <tr>
+                                            <td colspan="6" class="text-center py-4 text-muted">
+                                                No books found in the library. Click "Add Book" to get started.
+                                            </td>
+                                        </tr>
+                                    {% endif %}
+                                </tbody>
+                            </table>
                         </div>
                     </div>
                 </div>
@@ -540,5 +644,65 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 });
+
+// Book search/filter in admin table
+function filterAdminBooks(query) {
+    const q = (query || '').toLowerCase().trim();
+    const rows = document.querySelectorAll('#adminBooksTable tbody tr.admin-book-row');
+    rows.forEach(r => {
+        const title = r.getAttribute('data-title') || '';
+        const author = r.getAttribute('data-author') || '';
+        if (!q || title.includes(q) || author.includes(q)) {
+            r.style.display = '';
+        } else {
+            r.style.display = 'none';
+        }
+    });
+}
+
+// Delete Book Confirmation Modal Handler
+function confirmDeleteBook(bookId, bookTitle) {
+    const form = document.getElementById('deleteBookForm');
+    const titleEl = document.getElementById('deleteBookTitle');
+    if (form) form.action = `/admin/book/delete/${bookId}`;
+    if (titleEl) titleEl.textContent = bookTitle;
+    const modalEl = document.getElementById('deleteBookModal');
+    if (modalEl) {
+        const modal = new bootstrap.Modal(modalEl);
+        modal.show();
+    }
+}
 </script>
+
+<!-- Delete Book Confirmation Modal -->
+<div class="modal fade" id="deleteBookModal" tabindex="-1" aria-labelledby="deleteBookModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content rounded-4 border-0 shadow">
+            <div class="modal-header border-0 pb-0">
+                <div class="d-flex align-items-center gap-2 text-danger">
+                    <i class="bi bi-exclamation-triangle-fill fs-4"></i>
+                    <h5 class="modal-title fw-bold" id="deleteBookModalLabel">Remove Book</h5>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form id="deleteBookForm" method="POST" action="">
+                <div class="modal-body py-3">
+                    <p class="text-muted mb-2">Are you sure you want to permanently delete this book?</p>
+                    <div class="p-3 bg-light rounded-3 mb-3 border">
+                        <div class="fw-bold text-dark fs-6" id="deleteBookTitle">Book Title</div>
+                    </div>
+                    <div class="alert alert-warning py-2 px-3 small border-0 rounded-3 mb-0">
+                        <i class="bi bi-info-circle me-1"></i> <strong>Warning:</strong> This action cannot be undone. All pages, audio files, and reading history associated with this book will be deleted.
+                    </div>
+                </div>
+                <div class="modal-footer border-0 pt-0">
+                    <button type="button" class="btn btn-light rounded-pill px-4" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-danger rounded-pill px-4 fw-semibold">
+                        <i class="bi bi-trash3-fill me-1"></i> Delete Book
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
 {% endblock %}

@@ -2,28 +2,78 @@
 
 {% block title %}Reading: {{ book.title }} - AudioEbook Hub{% endblock %}
 
+{% block extra_css %}
+<style>
+/* Narrator Word Spans and Active Word Glow */
+.narrator-word {
+    display: inline;
+    border-radius: 4px;
+    padding: 1px 3px;
+    margin: 0 1px;
+    transition: background-color 0.15s ease, color 0.15s ease;
+    cursor: pointer;
+}
+.narrator-word:hover {
+    background-color: rgba(245, 158, 11, 0.22);
+    color: #b45309;
+    border-radius: 4px;
+}
+.narrator-active-word {
+    background: linear-gradient(135deg, #f59e0b, #d97706) !important;
+    color: #ffffff !important;
+    font-weight: 700 !important;
+    border-radius: 6px !important;
+    padding: 2px 6px !important;
+    box-shadow: 0 2px 10px rgba(245, 158, 11, 0.5) !important;
+    transform: scale(1.03);
+    display: inline-block;
+}
+.theme-night .narrator-word:hover {
+    background-color: rgba(245, 158, 11, 0.3);
+    color: #fde047;
+}
+.theme-night .narrator-active-word {
+    background: linear-gradient(135deg, #d97706, #b45309) !important;
+    color: #ffffff !important;
+    box-shadow: 0 2px 10px rgba(217, 119, 6, 0.6) !important;
+}
+.theme-sepia .narrator-active-word {
+    background: linear-gradient(135deg, #b45309, #78350f) !important;
+    color: #fffbeb !important;
+}
+</style>
+{% endblock %}
+
 {% block content %}
-<div class="container py-4">
+<div class="container py-4" id="reader-root" data-book-id="{{ book.id }}" data-current-page="{{ current_chapter.chapter_number if current_chapter else 1 }}" data-total-pages="{{ book.chapters|length }}">
     <!-- Reader Controls Bar -->
-    <div class="reader-controls-bar">
+    <div class="reader-controls-bar shadow-sm rounded-4 p-3 mb-4 bg-white border d-flex flex-wrap align-items-center justify-content-between gap-3">
         <div class="d-flex align-items-center gap-2">
-            <a href="{{ url_for('book_detail', book_id=book.id) }}" class="btn btn-sm btn-outline-secondary">
+            <a href="{{ url_for('book_detail', book_id=book.id) }}" class="btn btn-sm btn-outline-secondary rounded-pill">
                 <i class="bi bi-arrow-left"></i> Book Details
             </a>
-            <span class="fw-bold d-none d-md-inline ms-2">{{ book.title }}</span>
+            <span class="fw-bold d-none d-md-inline ms-2 text-dark">{{ book.title }}</span>
         </div>
 
-        <!-- Chapter Selector Dropdown -->
+        <!-- Page / Chapter Selector Dropdown -->
         {% if book.chapters %}
         <div class="dropdown">
-            <button class="btn btn-sm btn-outline-primary dropdown-toggle rounded-pill" type="button" data-bs-toggle="dropdown">
-                <i class="bi bi-list-ul me-1"></i> {{ current_chapter.title if current_chapter else 'Select Chapter' }}
+            <button class="btn btn-sm btn-outline-primary dropdown-toggle rounded-pill px-3" type="button" data-bs-toggle="dropdown" id="reader-dropdown-btn">
+                <i class="bi bi-book-half me-1"></i> <span id="reader-dropdown-label">{{ current_chapter.title if current_chapter else 'Select Page' }}</span>
             </button>
-            <ul class="dropdown-menu shadow">
+            <ul class="dropdown-menu shadow-lg border-0 py-2" id="reader-dropdown-menu" style="max-height: 320px; overflow-y: auto; width: 260px;">
+                {% if book.chapters|length > 3 %}
+                <li class="px-3 py-2 border-bottom sticky-top bg-white">
+                    <div class="input-group input-group-sm">
+                        <input type="number" id="reader-jump-input" class="form-control form-control-sm" placeholder="Page (1-{{ book.chapters|length }})" min="1" max="{{ book.chapters|length }}">
+                        <button class="btn btn-warning btn-sm fw-bold px-2" type="button" onclick="jumpStandalonePage()">Go</button>
+                    </div>
+                </li>
+                {% endif %}
                 {% for chap in book.chapters %}
                 <li>
-                    <a class="dropdown-item {% if current_chapter and chap.id == current_chapter.id %}active{% endif %}" href="{{ url_for('reader', book_id=book.id, chapter=chap.id) }}">
-                        {{ chap.chapter_number }}. {{ chap.title }}
+                    <a class="dropdown-item {% if current_chapter and chap.id == current_chapter.id %}active fw-bold{% endif %}" href="#" onclick="switchStandalonePage({{ chap.chapter_number }}); return false;">
+                        {{ chap.title }}
                     </a>
                 </li>
                 {% endfor %}
@@ -31,75 +81,103 @@
         </div>
         {% endif %}
 
-        <!-- Customization Controls -->
-        <div class="d-flex align-items-center gap-2">
+        <!-- Customization & Narrator Controls -->
+        <div class="d-flex align-items-center gap-2 flex-wrap">
             <!-- Reader Theme Dropdown -->
             <div class="dropdown">
-                <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown">
-                    <i class="bi bi-palette"></i> Theme
+                <button class="btn btn-sm btn-outline-secondary dropdown-toggle rounded-pill px-3" type="button" data-bs-toggle="dropdown">
+                    <i class="bi bi-palette me-1"></i> Theme
                 </button>
-                <ul class="dropdown-menu dropdown-menu-end">
-                    <li><button class="dropdown-item" onclick="setReaderTheme('light')"><i class="bi bi-sun me-2"></i> Light Theme</button></li>
-                    <li><button class="dropdown-item" onclick="setReaderTheme('sepia')"><i class="bi bi-journal-richtext me-2"></i> Sepia 📜</button></li>
-                    <li><button class="dropdown-item" onclick="setReaderTheme('night')"><i class="bi bi-moon-stars me-2"></i> Night Mode 🌙</button></li>
+                <ul class="dropdown-menu shadow border-0">
+                    <li><button class="dropdown-item" onclick="setReaderTheme('light')"><i class="bi bi-sun me-2 text-warning"></i> Light Theme</button></li>
+                    <li><button class="dropdown-item" onclick="setReaderTheme('sepia')"><i class="bi bi-journal-richtext me-2 text-amber-700"></i> Sepia 📜</button></li>
+                    <li><button class="dropdown-item" onclick="setReaderTheme('night')"><i class="bi bi-moon-stars me-2 text-primary"></i> Night Mode 🌙</button></li>
                 </ul>
             </div>
 
             <!-- Font Selector -->
-            <select class="form-select form-select-sm" style="width: auto;" onchange="changeReaderFont(this.value)">
+            <select class="form-select form-select-sm rounded-pill" style="width: auto;" onchange="changeReaderFont(this.value)">
                 <option value="sans-serif">Sans-Serif</option>
-                <option value="serif">Serif (Book)</option>
+                <option value="serif" selected>Serif (Book)</option>
                 <option value="monospace">Monospace</option>
             </select>
 
             <!-- Font Size Controls -->
             <div class="btn-group btn-group-sm">
-                <button class="btn btn-outline-secondary" onclick="adjustFontSize(-2)">A-</button>
-                <button class="btn btn-outline-secondary" onclick="adjustFontSize(2)">A+</button>
+                <button class="btn btn-outline-secondary rounded-start-pill" onclick="adjustFontSize(-2)" title="Decrease font size">A-</button>
+                <button class="btn btn-outline-secondary rounded-end-pill" onclick="adjustFontSize(2)" title="Increase font size">A+</button>
+            </div>
+
+            <!-- Live Text Narrator Controls -->
+            <div class="d-flex align-items-center gap-2 border-start ps-2 ms-1">
+                <button id="reader-narrator-btn" class="btn btn-sm btn-gradient rounded-pill px-3 shadow-sm d-inline-flex align-items-center gap-2" onclick="toggleStandaloneNarrator()" title="Listen to this page with live word highlighting">
+                    <i class="bi bi-play-fill fs-5" id="narrator-play-icon"></i>
+                    <span id="narrator-play-label" class="fw-semibold">Listen</span>
+                </button>
+                <button id="reader-narrator-stop-btn" class="btn btn-sm btn-outline-danger rounded-circle p-0 d-none" style="width: 32px; height: 32px;" onclick="stopStandaloneNarrator()" title="Stop Reading">
+                    <i class="bi bi-stop-fill"></i>
+                </button>
+                <select id="narrator-speed-select" class="form-select form-select-sm rounded-pill d-none d-sm-inline-block" style="width: 78px;" onchange="changeNarratorSpeed(this.value)" title="Narration Speed">
+                    <option value="0.8">0.8x</option>
+                    <option value="1.0" selected>1.0x</option>
+                    <option value="1.25">1.25x</option>
+                    <option value="1.5">1.5x</option>
+                </select>
+                <span id="narrator-status-badge" class="badge bg-warning bg-opacity-25 text-dark border border-warning-subtle rounded-pill px-2 py-1 small d-none">
+                    <span class="spinner-grow spinner-grow-sm text-warning me-1" role="status" style="width: 8px; height: 8px;"></span> Narrating
+                </span>
             </div>
 
             {% if book.has_audio %}
-            <a href="{{ url_for('audio_player', book_id=book.id, chapter=current_chapter.id if current_chapter else None) }}" class="btn btn-sm btn-gradient" title="Switch to Audio Player">
-                <i class="bi bi-headphones me-1"></i> Audio Player
+            <a href="{{ url_for('audio_player', book_id=book.id, chapter=current_chapter.id if current_chapter else None) }}" class="btn btn-sm btn-outline-dark rounded-pill" title="Switch to Dedicated Audio Player">
+                <i class="bi bi-headphones me-1"></i> Audio
             </a>
             {% endif %}
         </div>
     </div>
 
-    <!-- Reading Content Area -->
+    <!-- Reading Content Area (Realistic 3D Book Page Container) -->
     {% if current_chapter %}
-    <div id="reader-content-card" class="reader-container theme-light">
-        <h2 class="fw-bold mb-1">{{ current_chapter.title }}</h2>
-        <p class="text-muted small mb-4">Chapter {{ current_chapter.chapter_number }} of {{ book.chapters|length }}</p>
+    <div class="book-page-container rounded-4 shadow-sm mx-auto p-0" style="max-width: 900px;" id="reader-paper-container">
+        <div id="reader-content-card" class="book-page-surface book-gutter-left rounded-4 p-4 p-md-5 theme-light">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <span class="badge bg-warning-subtle text-warning border border-warning-subtle px-3 py-1 rounded-pill fw-bold text-uppercase" id="reader-page-badge">
+                    Page {{ current_chapter.chapter_number }} of {{ book.chapters|length }}
+                </span>
+                <small class="text-muted" id="reader-header-book-title">{{ book.title }}</small>
+            </div>
 
-        <div id="reader-text" class="reader-text-body font-sans">
-            {{ current_chapter.text_content | replace('\n', '<br>') | safe }}
+            <h3 class="fw-bold font-heading text-dark mb-4" id="reader-page-title">{{ current_chapter.title }}</h3>
+
+            <div id="reader-text" class="reader-text-body font-serif lead" style="font-size: 1.05rem; line-height: 1.8; min-height: 380px;">
+                {{ current_chapter.text_content | replace('\n', '<br>') | safe }}
+            </div>
+
+            <div class="mt-5 pt-3 border-top d-flex justify-content-between align-items-center text-muted small">
+                <span>Pustika E-Reader</span>
+                <span id="reader-page-footer">Page {{ current_chapter.chapter_number }} of {{ book.chapters|length }}</span>
+            </div>
         </div>
     </div>
 
-    <!-- Chapter Pagination Footer -->
-    <div class="d-flex justify-content-between align-items-center mt-4 mb-5">
-        {% set prev_chap = book.chapters[current_chapter.chapter_number - 2] if current_chapter.chapter_number > 1 else None %}
-        {% set next_chap = book.chapters[current_chapter.chapter_number] if current_chapter.chapter_number < book.chapters|length else None %}
+    <!-- Page Pagination Footer Controls -->
+    <div class="d-flex justify-content-between align-items-center mt-4 mb-5" style="max-width: 900px; margin-left: auto; margin-right: auto;">
+        <button class="btn btn-outline-custom rounded-pill px-4" id="reader-prev-btn" onclick="changeStandalonePage(-1)" {% if current_chapter.chapter_number <= 1 %}disabled style="opacity: 0.4;"{% endif %}>
+            <i class="bi bi-chevron-left me-1"></i> Previous Page
+        </button>
 
-        {% if prev_chap %}
-        <a href="{{ url_for('reader', book_id=book.id, chapter=prev_chap.id) }}" class="btn btn-outline-custom">
-            <i class="bi bi-chevron-left me-1"></i> Previous Chapter
-        </a>
-        {% else %}
-        <div></div>
-        {% endif %}
+        <span class="text-muted fw-semibold small">
+            <span id="reader-nav-cur">{{ current_chapter.chapter_number }}</span> / {{ book.chapters|length }}
+        </span>
 
-        {% if next_chap %}
-        <a href="{{ url_for('reader', book_id=book.id, chapter=next_chap.id) }}" class="btn btn-gradient">
-            Next Chapter <i class="bi bi-chevron-right ms-1"></i>
-        </a>
-        {% endif %}
+        <button class="btn btn-gradient rounded-pill px-4" id="reader-next-btn" onclick="changeStandalonePage(1)" {% if current_chapter.chapter_number >= book.chapters|length %}disabled style="opacity: 0.4;"{% endif %}>
+            Next Page <i class="bi bi-chevron-right ms-1"></i>
+        </button>
     </div>
     {% else %}
-    <div class="reader-container text-center py-5">
-        <h4>No chapters available to read yet.</h4>
-        <a href="{{ url_for('book_detail', book_id=book.id) }}" class="btn btn-primary mt-3">Back to Details</a>
+    <div class="reader-container text-center py-5 rounded-4 shadow-sm bg-white border">
+        <h4>No pages available to read yet.</h4>
+        <a href="{{ url_for('book_detail', book_id=book.id) }}" class="btn btn-primary rounded-pill mt-3">Back to Details</a>
     </div>
     {% endif %}
 </div>
